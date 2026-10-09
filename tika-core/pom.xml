@@ -338,7 +338,9 @@
             <param>org.apache.tika.config.TikaExtras</param>
           </targetClasses>
           <targetTests>
-            <param>org.apache.tika.config.TikaExtras*Test</param>
+            <param>org.apache.tika.config.TikaExtrasTest</param>
+            <param>org.apache.tika.config.TikaExtras_extrasDir_3_1_Test</param>
+            <param>org.apache.tika.config.TikaExtrasManualTest</param>
           </targetTests>
         </configuration>
       </plugin>
