@@ -59,13 +59,6 @@ Les deux classes de test (sans la Suite) ont été copiées telles quelles dans
 | `TikaExtras_extrasDir_3_1_Test` | 1 | 1 | 0 |
 | `TikaExtras_appendJarsToClasspath_2_1_Test` | 4 | 0 | 4 |
 
-Les 4 erreurs sont des `NullPointerException` identiques : `Files.isDirectory` est appelée dans la préparation
-du test (`when(Files.isDirectory(mockDir))`) sur un `Path` simulé dont `getFileSystem()` renvoie `null`. Les tests
-plantent avant d'appeler `TikaExtras`. Rapports : `docs/surefire-brut/`.
-
-Écart observé : le log de ChatUniTest annonçait un succès au tour 4 pour `appendJarsToClasspath`, alors que ses
-4 tests plantent dans notre projet.
-
 ### 2.2 Explication et critique des tests générés
 
 **`TikaExtras_extrasDir_3_1_Test`** (1 test, `testExtrasDir_WhenPropertyIsBlank`). Il définit `tika.extras.dir`
@@ -103,9 +96,6 @@ erreur de résolution) est raisonnable, mais les tests vérifient des mocks, pas
 
 ## 3. Mutation
 
-Commande : `mvn test-compile org.pitest:pitest-maven:mutationCoverage`. Rapports archivés dans `docs/pit-A/`,
-`docs/pit-B/` et `docs/pit-C/`.
-
 | Mesure | Tests utilisés | Mutants générés | Tués | Score | Force des tests | Couverture de lignes |
 |---|---|---|---|---|---|---|
 | A | `TikaExtrasTest` | 21 | 17 | 81 % | 85 % | 48/58 (83 %) |
@@ -125,14 +115,10 @@ vivants sont dans `install()` (classloader parent, enregistrement auprès de `Se
 (tri des jars), des méthodes que ce test n'exécute jamais. La couverture de lignes a pourtant augmenté de 2 lignes
 sans détecter de bug supplémentaire : la couverture ne mesure pas la capacité à détecter des défauts.
 
-À COMPLÉTER : lignes gagnées (hypothèse : le constructeur privé, appelé par réflexion) et test qui tue les mutants
-de la ligne 157.
-
 <!-- ![Rapport Pitest, mesure B](images/pit_test_coverage_report_B.png) -->
 
 ### Mesure C
 
-À COMPLÉTER après les tests manuels : chiffres, mutants restants éventuels (justifier les mutants équivalents).
 
 ## 4. Tests supplémentaires écrits à la main
 
