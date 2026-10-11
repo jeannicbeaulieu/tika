@@ -102,7 +102,7 @@ mocks et non le code de `TikaExtras` :
 #### Mesure A
 ![Rapport Pitest, mesure A](images/pit_test_coverage_report_A.png)
 #### Mesure B
-![Rapport Pitest, mesure B](images/pit_test_coverage_report_B.png)\
+![Rapport Pitest, mesure B](images/pit_test_coverage_report_B.png)
 #### Mesure C
 ![Rapport Pitest, mesure C](images/pit_test_coverage_report_C.png)
 
