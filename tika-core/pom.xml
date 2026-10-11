@@ -336,11 +336,32 @@
         <configuration>
           <targetClasses>
             <param>org.apache.tika.config.TikaExtras</param>
+            <param>org.apache.tika.mime.Patterns</param>
+            <param>org.apache.tika.sax.BasicContentHandlerFactory</param>
           </targetClasses>
           <targetTests>
+            <!-- Original tests -->
             <param>org.apache.tika.config.TikaExtrasTest</param>
+            <param>org.apache.tika.mime.PatternsTest</param>
+            <param>org.apache.tika.sax.BasicContentHandlerFactoryTest</param>
+            <!-- ChatUniTest generated tests -->
             <param>org.apache.tika.config.TikaExtras_extrasDir_3_1_Test</param>
+
+            <param>org.apache.tika.sax.BasicContentHandlerFactory_equals_Test</param>
+            <param>org.apache.tika.sax.BasicContentHandlerFactory_handlerTypeName_11_2_Test.java</param>
+            <param>org.apache.tika.sax.BasicContentHandlerFactory_hashCode_19_0_Test.java</param>
+            <param>org.apache.tika.sax.BasicContentHandlerFactory_newInstance_2_0_Test.java</param>
+            <param>org.apache.tika.sax.BasicContentHandlerFactory_parseHandlerType_3_0_Test.java</param>
+
+            <param>org.apache.tika.mime.Patterns_add_1_0_Test</param>
+            <param>org.apache.tika.mime.Patterns_matches_5_2_Test</param>
+
+            <!-- Manual tests (Mesure C) -->
+            <param>org.apache.tika.mime.PatternsManualTest</param>
+            <param>org.apache.tika.sax.BasicContentHandlerFactoryManualTest</param>
             <param>org.apache.tika.config.TikaExtrasManualTest</param>
+
+
           </targetTests>
         </configuration>
       </plugin>
@@ -352,7 +373,7 @@
           <apiKeys>xxx</apiKeys>
           <model>codeqwen:v1.5-chat</model>
           <url>http://localhost:11434/v1/chat/completions</url>
-          <selectClass>org.apache.tika.config.TikaExtras</selectClass>
+          <selectClass>org.apache.tika.mime.Patterns</selectClass>
           <tmpOutput>${project.build.directory}/chatunitest-info</tmpOutput>
           <testOutput>${project.basedir}/chatunitest</testOutput>
           <testNumber>3</testNumber>
@@ -373,9 +394,9 @@
           <jvmArgs>-Xmx256m</jvmArgs>
           <timeout>240000</timeout>
           <effort>max</effort>
-        <failOnError>true</failOnError>
-      </configuration>
-    </plugin>
+          <failOnError>true</failOnError>
+        </configuration>
+      </plugin>
       <plugin>
         <groupId>org.apache.maven.plugins</groupId>
         <artifactId>maven-project-info-reports-plugin</artifactId>
