@@ -114,3 +114,64 @@ fichiers générés ont été écartés.
 
 ### Mesure C
 Le score de mutation passe à 100 % (21 mutants sur 21) et la couverture de lignes à 88 %.
+
+
+## 4. Documentation des tests manuels
+
+### Test 1 : `extraJarsAreSortedByFileName`
+**Intention.** Vérifier que `extraJars()` renvoie les jars triés par nom de fichier. Ce tri rend l'ordre de chargement des jars, 
+donc la priorité entre les classes qu'ils contiennent, identique d'une machine à l'autre. Sans lui, l'ordre dépendrait de celui 
+dans lequel le système de fichiers liste les fichiers.
+**Données de test.** Quatre fichiers vides : `B.jar`, `a.jar`, `C.jar` et `d.jar`. Les noms mélangent majuscules et minuscules 
+pour une raison précise. Sous Windows, le système de fichiers liste les fichiers sans tenir compte de la casse, ce qui donne 
+`a, B, C, d`. Le tri de `TikaExtras` compare les chaînes en tenant compte de la casse. Les deux ordres sont donc différents, et 
+supprimer le tri change le résultat. Avec seulement `a.jar` et `b.jar`, les deux ordres seraient identiques et le mutant survivrait. 
+J'ai choisi `d.jar` plutôt que `b.jar` parce que Windows ne distingue pas `B.jar` de `b.jar`, ce qui empêcherait de créer les deux fichiers.
+**Oracle.** L'ordre attendu est `B.jar, C.jar, a.jar, d.jar`. Il vient de la façon dont Java compare les chaînes : les caractères 
+sont comparés par leur code, et les majuscules, de 65 à 90, précèdent les minuscules, de 97 à 122. Le test compare donc la liste 
+des noms obtenue à cette liste exacte avec `assertEquals`.
+**Mutants visés.** Ligne 122, `removed call to List::sort`, et ligne 122, `replaced return value with ""` pour le comparateur. Dans 
+le second cas, toutes les clés de tri deviennent égales, le tri ne change plus rien et l'ordre redevient celui du système de fichiers, 
+ce que le test détecte.
+
+### Test 2 : `installUsesThreadContextClassLoaderAsParent`
+**Intention.** Vérifier que, lorsque le thread possède un classloader de contexte, `install()` l'utilise comme parent du nouveau 
+`URLClassLoader`. Les classes du projet restent ainsi visibles depuis les jars supplémentaires.
+**Données de test.** Un `URLClassLoader` vide, créé par le test et défini comme classloader du thread, et un dossier contenant 
+un seul jar vide. Le classloader est créé par le test, donc différent de celui de `TikaExtras`. C'est indispensable : dans l'environnement 
+de test, le classloader du thread et celui de `TikaExtras` sont probablement le même objet, ce qui explique que le mutant survivait avec 
+les tests d'origine.
+**Oracle.** Le code de `install()` prend le classloader du thread comme parent, et ne se rabat sur celui de `TikaExtras` que s'il 
+est `null`. Le parent du classloader renvoyé doit donc être exactement l'objet défini sur le thread. Le test le vérifie avec `assertSame`, 
+qui compare les références et non le contenu.
+**Mutant visé.** Ligne 90, `negated conditional` sur `parent == null`. Avec la condition inversée, le classloader du thread serait 
+remplacé par celui de `TikaExtras`, et `assertSame` échouerait.
+
+### Test 3 : `installWithNullContextClassLoaderFallsBackToTikaExtrasLoader`
+**Intention.** Vérifier le cas inverse : si le thread n'a aucun classloader de contexte, `install()` utilise celui de `TikaExtras` 
+comme parent. Cette branche, aux lignes 90 et 91, n'était jamais exécutée.
+**Données de test.** Le classloader du thread est mis à `null`, avec un dossier contenant un seul jar vide. Le jar est nécessaire 
+parce que `install()` retourne `null` avant d'atteindre cette branche quand il n'y a rien à charger.
+**Oracle.** D'après le code, le repli est `TikaExtras.class.getClassLoader()`. Le parent du classloader renvoyé doit donc être cet 
+objet, ce que le test vérifie avec `assertSame`.
+**Mutant visé.** Ligne 90, `negated conditional`, dans l'autre branche. Avec la condition inversée, le parent resterait `null` et 
+le test échouerait. Ce test fait aussi exécuter la ligne 91, jusque-là sans couverture.
+
+### Test 4 : `installRegistersLoaderWithServiceLoader`
+**Intention.** Vérifier que `install()` enregistre le nouveau classloader auprès de `ServiceLoader`, la classe que Tika utilise 
+pour découvrir ses parsers et ses détecteurs. Le simple fait de le définir sur le thread ne suffit pas, parce que `ServiceLoader` 
+garde sa propre référence.
+**Données de test.** Un dossier contenant un seul jar vide, ce qui suffit à ce que `install()` crée un classloader. Le test n'a 
+besoin d'aucune autre configuration, et il se trouve dans le même package que `ServiceLoader`, ce qui lui donne accès à sa méthode 
+`getContextClassLoader()`.
+**Oracle.** La documentation de `ServiceLoader` indique que `getContextClassLoader()` renvoie le classloader enregistré, et son 
+propre classloader par défaut si aucun n'a été enregistré. Après `install()`, elle doit donc renvoyer exactement le classloader 
+que `install()` a retourné, ce que le test vérifie avec `assertSame`. Sans l'appel, elle renverrait le classloader par défaut, 
+qui est un autre objet.
+**Mutant visé.** Ligne 95, `removed call to ServiceLoader::setContextClassLoader`.
+
+## 5. Déclaration de l'utilisation de l'IAG
+Déclaration DDIA: Outil d'intelligence artificielle: Claude (Anthropic); 
+Conceptualisation: L'IAG a été utilisée pour aider à expliquer les consignes de la Tâche 2 en précisant exactement ce qui est attendu et en expliquant les termes moins clairs. L'IAG a partiellement assistée dans l'écriture des tests manuelles puisque la méthode d'écriture de test n'a pas tout à fait été comprise.; 
+Exécution: L'IAG a été utilisée pour aider à l'installation et à l'utilisation d'Ollama et de ChatUniTest puisque leur fonctionnement n'était pas clairs et un peu compliqué par moment. L'IAG a aussi été utilisé lors de l'exécution des tests dans le terminal puisque les commandes n'étaient pas tout à fait connues. L'IAG à également été utilisée pour aider dans le déboggage des tests écrits manuellement. Elle a aussi été utilisée pour aider à écrire dans les fichier pom.xml; 
+Rédaction - Révision et édition: L'IAG a été utilisée pour aider à formatter le fichier README.md pour sauver du temps.
