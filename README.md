@@ -81,7 +81,7 @@ mocks et non le code de `TikaExtras` :
 - Ils créent un mock de la classe testée, qui n'a que des méthodes statiques. L'instance passée à `invoke` est donc ignorée et le mock ne sert à rien.
 - Deux tests répètent ce que `appendJarsToClasspathOffReturnsInput` vérifie déjà dans `TikaExtrasTest`.
 
-### 2.6 Comparaison des oracles
+### 2.3 Comparaison des oracles
 
 | Critère | Tests originaux (`TikaExtrasTest`) | Tests générés |
 |---|---|---|
@@ -99,8 +99,11 @@ mocks et non le code de `TikaExtras` :
 | **B** | A + test généré par ChatUniTest (1 test) | 86 % (50/58) | 81 % (17/21) | 85 % |
 | **C** | B + 4 tests écrits à la main | 88 % (51/58) | **100 %** (21/21) | **100 %** |
 
+#### Mesure A
 ![Rapport Pitest, mesure A](images/pit_test_coverage_report_A.png)
-![Rapport Pitest, mesure B](images/pit_test_coverage_report_B.png)
+#### Mesure B
+![Rapport Pitest, mesure B](images/pit_test_coverage_report_B.png)\
+#### Mesure C
 ![Rapport Pitest, mesure C](images/pit_test_coverage_report_C.png)
 
 ### Mesure B : tests d'origine + test généré
