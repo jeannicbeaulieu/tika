@@ -9,9 +9,9 @@
 | Lignes non couvertes (rouge) | 82, 83, 87, 91, 116, 117, 162, 163, 164 |
 | Lignes partiellement couvertes (jaune) | 86, 90, 122, 157 |
 
-<!-- ![Couverture JaCoCo de TikaExtras](images/jacoco_rapport.png) -->
-<!-- ![Code de TikaExtras avec les lignes non couvertes](docs/code_tikaextra1.png) -->
-<!-- ![Code de TikaExtras avec les lignes non couvertes](docs/code_tikaextra2.png) -->
+![Couverture JaCoCo de TikaExtras](images/jacoco_rapport.png)
+![Code de TikaExtras avec les lignes non couvertes](docs/code_tikaextra1.png)
+![Code de TikaExtras avec les lignes non couvertes](docs/code_tikaextra2.png)
 
 
 **Justification** Classe courte, sans dépendance lourde, logique claire (conditions, tri, construction
@@ -25,8 +25,8 @@ d'un classpath), avec un test existant mais incomplet.
 
 Couverture de ligne (classes mutées) : 48/58 (83 %). Rapport archivé : `docs/pit-A/`.
 
-<!-- ![Rapport Pitest, mesure A](images/pit_test_coverage_report.png) -->
-<!-- ![Mutants vivants de TikaExtras, mesure A](images/mutations_tikaextra.png) -->
+![Rapport Pitest, mesure A](images/pit_test_coverage_report_A.png)
+![Mutants vivants de TikaExtras, mesure A](images/mutations_tikaextra.png)
 
 Mutants vivants (4) :
 
@@ -61,26 +61,25 @@ Les deux classes de test (sans la Suite) ont été copiées telles quelles dans
 
 ### 2.2 Explication et critique des tests générés
 
-**`TikaExtras_extrasDir_3_1_Test`** (1 test, `testExtrasDir_WhenPropertyIsBlank`). Il définit `tika.extras.dir`
+**`TikaExtras_extrasDir_3_1_Test`.** Ce fichier contient un seul test. Il définit la propriété `tika.extras.dir` 
 à `"   "` et vérifie avec `assertNull` que `extrasDir()` renvoie `null`.
-- Points positifs : il cible un cas que `TikaExtrasTest` ne vérifie pas (propriété définie mais blanche, ligne 157) ;
-  l'oracle est précis (sans la condition `isBlank()`, `Path.of("")` renverrait un chemin vide et non `null`) ;
-  nom explicite, structure Arrange / Act / Assert lisible.
-- Défauts : la propriété système n'est jamais restaurée (fuite d'état global) ; réflexion inutile pour construire
-  un objet à constructeur privé alors que la méthode est statique ; `@ExtendWith(MockitoExtension.class)` sans aucun
-  mock ; imports `*` ; un seul cas, le chemin invalide (lignes 162-164) n'est pas testé.
 
-**`TikaExtras_appendJarsToClasspath_2_1_Test`** (4 tests, tous en erreur). L'intention (aucun jar, jars présents,
-erreur de résolution) est raisonnable, mais les tests vérifient des mocks, pas le code :
-- simulation de méthodes statiques du JDK (`Files.isDirectory`, `Files.newDirectoryStream`) sans `mockStatic` ;
-- mock de la classe testée, qui n'a que des méthodes statiques (l'instance passée à `invoke` est ignorée) ;
-- le code testé lit une propriété système (une chaîne) : y placer `mockDir.toString()` ne peut jamais exposer
-  les jars simulés ;
-- oracles inventés (`"existing/jar1.jar"`, avec des `/` codés en dur, faux sous Windows) pour des jars inexistants ;
-- `doThrow(new Exception(...))` sur `toAbsolutePath()`, qui ne déclare pas d'exception vérifiée ;
-- deux tests redondants avec `appendJarsToClasspathOffReturnsInput` de `TikaExtrasTest` ;
-- propriété système jamais restaurée.
+Le test a de bons côtés. Il vise un cas que `TikaExtrasTest` ne vérifie pas, soit une propriété définie mais blanche, 
+à la ligne 157. Son oracle est précis : sans la condition `isBlank()`, `Path.of("")` renverrait un chemin vide au lieu 
+de `null`, et le test échouerait. Le nom est explicite et la structure Arrange, Act, Assert se lit facilement.
 
+Il a aussi plusieurs défauts. La propriété système n'est jamais remise dans son état d'origine, ce qui peut perturber 
+les autres tests. Le test passe par la réflexion pour construire un objet à constructeur privé, alors que la méthode 
+est statique et s'appelle directement. Il utilise `@ExtendWith(MockitoExtension.class)` sans aucun mock, et ses imports 
+utilisent la forme `*`, ce que checkstyle refuse. Enfin, il ne teste qu'un cas, et le chemin invalide des lignes 162 à 164 reste sans test.
+
+**`TikaExtras_appendJarsToClasspath_2_1_Test`.** Ce fichier contient quatre tests, tous en erreur. L'intention est raisonnable, puisqu'il 
+veut tester l'absence de jar, la présence de jars et une erreur pendant la résolution d'un jar. Le problème est que les tests vérifient des 
+mocks et non le code de `TikaExtras` :
+
+- Ils simulent des méthodes statiques du JDK, `Files.isDirectory` et `Files.newDirectoryStream`, sans passer par `mockStatic`, ce qui provoque une `NullPointerException` dès la préparation du test.
+- Ils créent un mock de la classe testée, qui n'a que des méthodes statiques. L'instance passée à `invoke` est donc ignorée et le mock ne sert à rien.
+- Deux tests répètent ce que `appendJarsToClasspathOffReturnsInput` vérifie déjà dans `TikaExtrasTest`.
 
 ### 2.6 Comparaison des oracles
 
@@ -91,50 +90,24 @@ erreur de résolution) est raisonnable, mais les tests vérifient des mocks, pas
 | Portabilité | `File.pathSeparator`, fermeture du `URLClassLoader` pour Windows | `/` codé en dur |
 | Nettoyage de l'état global | `finally` qui restaure propriété et classloader | aucun |
 | Ce qui est testé | le code réel de `TikaExtras` | surtout les mocks eux-mêmes |
-| Apport | — | seul cas nouveau : propriété blanche (ligne 157) |
-
 
 ## 3. Mutation
 
-| Mesure | Tests utilisés | Mutants générés | Tués | Score | Force des tests | Couverture de lignes |
-|---|---|---|---|---|---|---|
-| A | `TikaExtrasTest` | 21 | 17 | 81 % | 85 % | 48/58 (83 %) |
-| B | + `TikaExtras_extrasDir_3_1_Test` (tel que généré) | 21 | 17 | 81 % | 85 % | 50/58 (86 %) |
-| C | + tests manuels | À COMPLÉTER | | | | |
+| Mesure | Tests utilisés | Couverture de lignes | Score de mutation | Force des tests |
+|---|---|---|---|---|
+| **A** | tests d'origine (`TikaExtrasTest`, 5 tests) | 83 % (48/58) | 81 % (17/21) | 85 % |
+| **B** | A + test généré par ChatUniTest (1 test) | 86 % (50/58) | 81 % (17/21) | 85 % |
+| **C** | B + 4 tests écrits à la main | 88 % (51/58) | **100 %** (21/21) | **100 %** |
+
+![Rapport Pitest, mesure A](images/pit_test_coverage_report_A.png)
+![Rapport Pitest, mesure B](images/pit_test_coverage_report_B.png)
+![Rapport Pitest, mesure C](images/pit_test_coverage_report_C.png)
 
 ### Mesure B : tests d'origine + test généré
-
-Pitest avec `TikaExtrasTest` et le test généré `TikaExtras_extrasDir_3_1_Test`, sans retouche (checkstyle désactivé,
-pour mesurer ce que l'IA a réellement produit).
-
-Le score de mutation est inchangé : **les tests générés ne détectent pas tous les mutants, et n'en détectent
-aucun de plus que les tests d'origine**. Les 4 mutants vivants (lignes 90, 95 et 122) survivent.
-
-**Pourquoi.** Le seul test généré utilisable n'appelle que `extrasDir()` avec une propriété blanche. Les mutants
-vivants sont dans `install()` (classloader parent, enregistrement auprès de `ServiceLoader`) et dans `extraJars()`
-(tri des jars), des méthodes que ce test n'exécute jamais. La couverture de lignes a pourtant augmenté de 2 lignes
-sans détecter de bug supplémentaire : la couverture ne mesure pas la capacité à détecter des défauts.
-
-<!-- ![Rapport Pitest, mesure B](images/pit_test_coverage_report_B.png) -->
+La couverture de lignes passe de 83% à 86%, mais le score de mutation reste à 81%.
+La raison est que ce test n’exécute que extrasDir(), alors que les mutants vivants sont dans install() et extraJars(). 
+Autrement dit, le test de l’IA fait exécuter un peu plus de code, mais ne détecte aucun défaut de plus. Les trois autres \
+fichiers générés ont été écartés.
 
 ### Mesure C
-
-
-## 4. Tests supplémentaires écrits à la main
-
-Mutants ciblés : ligne 90 (`negated conditional`), ligne 95 (appel à `ServiceLoader::setContextClassLoader`
-supprimé), ligne 122 (`List::sort` supprimé et comparateur remplacé par `""`).
-
-À COMPLÉTER. Pour chaque test :
-
-| Champ | Contenu |
-|---|---|
-| Nom du test | |
-| Intention (comportement testé) | |
-| Motivation des données de test | |
-| Oracle (comment le résultat attendu est déterminé) | |
-| Mutant visé | |
-
-## 5. GitHub Action
-
-À COMPLÉTER : fichier `.github/workflows/...` et lien vers une exécution réussie.
+Le score de mutation passe à 100 % (21 mutants sur 21) et la couverture de lignes à 88 %.
