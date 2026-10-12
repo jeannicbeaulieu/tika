@@ -1,5 +1,7 @@
 ## 1. Choix de la classe
 
+### 1.1 org.apache.tika.config.TikaExtras
+
 | Élément | Valeur |
 |---|---|
 | Classe | `org.apache.tika.config.TikaExtras` |
@@ -39,6 +41,70 @@ Mutants vivants (4) :
 
 Remarque : les lignes rouges 82-83, 116-117 et 162-164 (blocs `catch`) comptent pour la couverture JaCoCo mais
 ne produisent aucun mutant vivant : Pitest ignore par défaut les appels aux bibliothèques de log.
+
+---
+
+### 1.2 org.apache.tika.mime.Patterns
+
+| Élément | Valeur |
+|---|---|
+| Classe | `org.apache.tika.mime.Patterns` |
+| Test existant | `PatternsTest` (tests réussis) |
+| Couverture JaCoCo des instructions | 83 % (63/388 manquant) |
+| Couverture JaCoCo des branches | 65 % (22/64 manquant) |
+
+**Justification** Classe de taille raisonnable avec une logique de routage interne (`add()` dispatche vers `addName`, `addExtension` ou `addGlob`) et une compilation glob-vers-regex. Les tests existants vérifient `matches()` sur quelques cas mais ignorent le routage interne et les conditions de remplacement, laissant de nombreux mutants vivants.
+
+**Preuve de mutants vivants (mesure A).** Pitest, avec uniquement `PatternsTest` :
+
+| Mutants générés | Tués | Score de mutation | Force des tests |
+|---|---|---|---|
+| 44 | 12 | 27 % | 41 % |
+
+Couverture de ligne (classes mutées) : 74 % (57/77).
+
+Mutants vivants (17 SURVIVED) — les plus significatifs :
+
+| Ligne | Mutant | Statut | Pourquoi les tests d'origine ne le détectent pas |
+|---|---|---|---|
+| 71, 83 | removed call to `addGlob` | SURVIVED | `testAdd()` ne vérifie pas `matches()` après ajout d'un glob complexe |
+| 74, 75 | negated conditional (routage vers `addExtension`) | SURVIVED | les tests ne vérifient pas l'effet du routage sur `matches()` |
+| 80 | removed call to `addExtension` | SURVIVED | idem — pas de vérification du résultat observable |
+| 90, 102, 108, 117 | negated conditional dans `add()` / `addName()` | SURVIVED | aucun test ne tente d'ajouter deux types pour le même motif |
+| 173, 175, 177, 179, 187 | negated conditional / replaced return in `compile()` | SURVIVED | `testAdd()` n'exerce pas la compilation glob-vers-regex |
+
+---
+
+### 1.3 org.apache.tika.sax.BasicContentHandlerFactory
+
+| Élément | Valeur |
+|---|---|
+| Classe | `org.apache.tika.sax.BasicContentHandlerFactory` |
+| Test existant | `BasicContentHandlerFactoryTest` (5 tests : testBody, testText, testHTML, testXML, testIgnore) |
+| Couverture JaCoCo des instructions | 50 % (227/459 manquant) |
+| Couverture JaCoCo des branches | 38 % (39/63 manquant) |
+
+**Justification** La classe encapsule la création de handlers SAX avec une limite d'écriture (`writeLimit`). Les tests existants couvrent les types de handlers mais n'exercent pas la condition frontière `writeLimit < 0`, laissant des mutants vivants sur cette ligne.
+
+**Preuve de mutants vivants (mesure A).** Pitest avec `BasicContentHandlerFactoryTest` uniquement :
+
+| Mutants générés | Tués | Score de mutation | Force des tests |
+|---|---|---|---|
+| 73 | 23 | 32 % | 96 % |
+
+Couverture de ligne (classes mutées) : 40 % (39/98).
+
+Mutant vivant significatif :
+
+| Ligne | Mutant | Statut | Pourquoi les tests d'origine ne le détectent pas |
+|---|---|---|---|
+| 171 | changed conditional boundary (`writeLimit < 0` → `<= 0`) | SURVIVED | les tests utilisent `writeLimit = -1` (illimité) ou `writeLimit > 0` (limité) ; la valeur frontière `0` n'est jamais testée |
+
+---
+
+**Justification du choix des classes.** Les classes `org.apache.tika.mime.Patterns` et `org.apache.tika.sax.BasicContentHandlerFactory` ont été sélectionnées parce que leurs tests existants ne couvrent pas suffisamment le code et ne détectent pas toutes les mutations. Pour Patterns, la couverture initiale des instructions est de 83 %, la couverture des branches est de 65 % et PIT rapporte 12 mutants tués sur 44, soit un score de mutation de 27 %. Pour BasicContentHandlerFactory, la couverture des instructions est de 50 %, celle des branches est de 38 % et PIT rapporte 23 mutants tués sur 73, soit un score de mutation d'environ 32 %. Ces résultats montrent qu'il reste des possibilités d'amélioration des tests.
+
+---
 
 ## 2. Génération des tests
 
@@ -91,7 +157,89 @@ mocks et non le code de `TikaExtras` :
 | Nettoyage de l'état global | `finally` qui restaure propriété et classloader | aucun |
 | Ce qui est testé | le code réel de `TikaExtras` | surtout les mocks eux-mêmes |
 
+---
+
+### 2.4 Patterns — Exécution sans intervention manuelle
+
+Les fichiers générés (sans la Suite) ont été copiés dans `tika-core/src/test/java/org/apache/tika/mime/`.
+
+| Fichier | Tests | Réussis | Erreurs avant correction |
+|---|---|---|---|
+| `Patterns_add_1_0_Test` | 3 | 0 | 3 |
+| `Patterns_matches_5_2_Test` | 4 | 4 | 0 |
+
+3 corrections manuelles nécessaires avant compilation et exécution réussies.
+
+### 2.5 Patterns — Corrections apportées
+
+**Cause commune.** ChatUniTest n'a pas analysé la logique de routage de `add()`. Il a supposé que les entrées se mappent directement à la méthode testée, sans tracer le dispatch interne.
+
+| Test | Erreur | Correction |
+|---|---|---|
+| `testAddName` | `assertEquals(type2, ...)` — `addName` est un no-op quand les deux types sont sans relation de sous-type ; `type1` reste | `assertEquals(type2, ...)` → `assertEquals(type1, ...)` |
+| `testAddExtension` | Pattern `"txt"` sans wildcard → route vers `addName`, jamais vers `addExtension` ; clé `"txt"` incorrecte (la méthode stocke `".txt"`) ; assertions contradictoires sur la même clé | Pattern → `"*.txt"`, clé → `".txt"`, `assertNull` contradictoire → vérification d'une clé absente (`".html"`) |
+| `testAddGlob` | Pattern `"*.txt"` avec `isJavaRegex=false` → route vers `addExtension`, jamais vers globs ; assertions contradictoires | `isJavaRegex` → `true` pour forcer le stockage direct dans globs ; correction de l'`assertNull` contradictoire |
+
+### 2.6 Patterns — Comparaison des oracles
+
+| Critère | Tests originaux (`PatternsTest`) | Tests générés |
+|---|---|---|
+| Pertinence | Testent le résultat de `matches()` après `add()` | Testent uniquement l'état interne des maps par réflexion |
+| Spécificité | Vérifient le type MIME retourné pour un nom de fichier précis | Vérifient la présence d'une clé dans une map — sans vérifier l'effet observable |
+| Robustesse | Indépendants de l'implémentation interne | Dépendent de la structure interne (noms de champs) |
+| Compréhension du routage | Correcte | Absente — l'IA ne trace pas le dispatch de `add()` |
+| Cas limites | Couverts partiellement | Absents (aucun cas null, aucun remplacement de type) |
+
+---
+
+### 2.7 BasicContentHandlerFactory — Exécution sans intervention manuelle
+
+Les fichiers générés (sans la Suite) ont été copiés dans `tika-core/src/test/java/org/apache/tika/sax/`.
+
+| Fichier | Tests | Réussis | Erreurs avant correction |
+|---|---|---|---|
+| `BasicContentHandlerFactory_equals_18_1_Test` | 1 | 0 | 6 (assertions bool) |
+| `BasicContentHandlerFactory_handlerTypeName_11_2_Test` | 2 | 2 | 0 |
+| `BasicContentHandlerFactory_hashCode_19_0_Test` | 4 | 4 | 0 |
+| `BasicContentHandlerFactory_newInstance_2_0_Test` | 2 | 2 | 0 |
+| `BasicContentHandlerFactory_parseHandlerType_3_0_Test` | 5 | 5 | 0 |
+
+6 corrections manuelles nécessaires.
+
+### 2.8 BasicContentHandlerFactory — Corrections apportées
+
+ChatUniTest a commis deux erreurs distinctes :
+
+**Erreur 1 — Confusion de type avec la réflexion.** L'IA a extrait des valeurs de champs par réflexion (`typeField.get(factory1)` → un enum `HANDLER_TYPE`) puis les a passées directement à `factory.equals()`. Or `equals()` rejette immédiatement tout argument qui n'est pas une `BasicContentHandlerFactory` via le garde `getClass() != o.getClass()`. L'IA n'a pas lu l'implémentation de `equals()`.
+
+**Erreur 2 — Oracle inversé sur `parseContext`.** L'IA a généré `assertFalse(factory3.equals(factory4))` pour deux factories avec les mêmes 4 champs comparés par `equals()`. L'implémentation ignore `parseContext`, donc les deux factories sont égales — `assertFalse` est incorrect.
+
+| # | Ligne | Erreur | Correction |
+|---|---|---|---|
+| 1 | 43 | `assertFalse(factory3.equals(factory4))` — les deux factories sont en réalité égales (`equals` ignore `parseContext`) | `assertFalse` → `assertTrue` |
+| 2 | 51 | `factory1.equals(typeField.get(factory1))` — compare une factory à un enum `HANDLER_TYPE` | → `assertEquals(typeField.get(factory1), typeField.get(factory2))` |
+| 3 | 57 | `factory1.equals(writeLimitField.get(factory1))` — compare à un `Integer` | → `assertEquals(writeLimitField.get(factory1), writeLimitField.get(factory2))` |
+| 4 | 63 | `factory1.equals(throwOnWriteLimitReachedField.get(factory1))` — compare à un `Boolean` | → `assertEquals(throwOnWriteLimitReachedField.get(factory1), throwOnWriteLimitReachedField.get(factory2))` |
+| 5 | 68 | `factory1.equals(validateXHTMLField.get(factory1))` — compare à un `Boolean` | → `assertEquals(validateXHTMLField.get(factory1), validateXHTMLField.get(factory2))` |
+| 6 | 74–75 | `factory1.equals(getFormatHandlerMethod.invoke(factory1))` — compare à un `ContentHandler` | → `assertEquals(...invoke(factory1).getClass(), ...invoke(factory2).getClass())` |
+
+### 2.9 BasicContentHandlerFactory — Comparaison des oracles
+
+| Critère | Tests originaux (`BasicContentHandlerFactoryTest`) | Tests générés |
+|---|---|---|
+| Pertinence | Créent un vrai handler et vérifient son contenu extrait | Comparent la factory à ses propres valeurs de champs — toujours faux |
+| Spécificité | `assertInstanceOf` + vérification du contenu produit | Assertions via réflexion sur des types incompatibles |
+| Robustesse | Indépendants de la JVM | Suppositions incorrectes sur `equals()` |
+| Compréhension de `equals()` | N/A (non testée originalement) | L'IA n'a pas lu l'implémentation — 5 assertions toujours false |
+| Valeur ajoutée | Bonne couverture des handlers | Nulle sans corrections |
+
+**Observation générale.** Les tests générés par ChatUniTest présentent des résultats variables selon la classe et le comportement testé. Pour Patterns, l'IA ne tient pas compte du routage effectué par `add()`, ce qui entraîne des entrées et des assertions incorrectes. Pour BasicContentHandlerFactory, elle interprète mal le comportement de `equals()` et confond les objets testés avec les valeurs de leurs champs. Dans les deux cas, plusieurs tests nécessitent des corrections manuelles avant de pouvoir être utilisés.
+
+---
+
 ## 3. Mutation
+
+### 3.1 TikaExtras
 
 | Mesure | Tests utilisés | Couverture de lignes | Score de mutation | Force des tests |
 |---|---|---|---|---|
@@ -108,15 +256,64 @@ mocks et non le code de `TikaExtras` :
 
 ### Mesure B : tests d'origine + test généré
 La couverture de lignes passe de 83% à 86%, mais le score de mutation reste à 81%.
-La raison est que ce test n’exécute que extrasDir(), alors que les mutants vivants sont dans install() et extraJars(). 
-Autrement dit, le test de l’IA fait exécuter un peu plus de code, mais ne détecte aucun défaut de plus. Les trois autres \
-fichiers générés ont été écartés.
+La raison est que ce test n'exécute que extrasDir(), alors que les mutants vivants sont dans install() et extraJars(). 
+Autrement dit, le test de l'IA fait exécuter un peu plus de code, mais ne détecte aucun défaut de plus. Les trois autres fichiers générés ont été écartés.
 
 ### Mesure C
 Le score de mutation passe à 100 % (21 mutants sur 21) et la couverture de lignes à 88 %.
 
+---
+
+### 3.2 Patterns
+
+| Mesure | Tests utilisés | Mutants générés | Tués | Score | Force des tests | Couv. lignes |
+|---|---|---|---|---|---|---|
+| **A** | `PatternsTest` | 44 | 12 | 27 % | 41 % | 74 % (57/77) |
+| **B** | A + tests générés corrigés (`Patterns_add_1_0_Test`) | 44 | 12 | 27 % | 41 % | 74 % (57/77) |
+| **C** | B + tests manuels (`PatternsManualTest`) | 44 | 44 | **100 %** | **100 %** | **100 %** (77/77) |
+
+### Mesure B : tests d'origine + tests générés corrigés
+Le score de mutation reste à 27 %. Les tests générés corrigés vérifient l'état interne des maps par réflexion mais ne testent pas `matches()` — les mutations sur le routage et la compilation restent invisibles.
+
+### Mesure C : ajout des tests manuels
+Le score de mutation passe à 100 % (44 mutants sur 44) et la couverture de lignes à 100 % (77/77). Les tests manuels appellent `matches(filename)` après `add()` et vérifient le type MIME retourné, ce qui rend toutes les mutations de routage, de stockage et de compilation observables.
+
+| Mutants tués | Raison |
+|---|---|
+| Lignes 71, 76, 80, 83 (removed call to addGlob/addName/addExtension) | `matches()` retourne null au lieu du type attendu |
+| Lignes 74, 75, 90 (negated conditional dans `add()`) | Le pattern est stocké dans la mauvaise map ; `matches()` retourne null |
+| Lignes 102, 108 (negated conditional dans `addName()`) | Le type retourné par `matches()` est incorrect |
+| Lignes 92, 107, 117, 119 (negated conditional sur `previous == type`) | Logique `isSpecializationOf()` mal consultée ; type retourné incorrect |
+| Lignes 173, 175, 177, 179 (negated conditional dans `compile()`) | Le motif compilé ne correspond plus ; `matches()` retourne null |
+| Ligne 187 (replaced return with `""` dans `compile()`) | Le motif compilé est vide ; `matches()` retourne null |
+
+---
+
+### 3.3 BasicContentHandlerFactory
+
+| Mesure | Tests utilisés | Mutants générés | Tués | Score | Force des tests | Couv. lignes |
+|---|---|---|---|---|---|---|
+| **A** | `BasicContentHandlerFactoryTest` | 73 | 23 | 32 % | 96 % | 40 % (39/98) |
+| **B** | A + tests générés corrigés (`BasicContentHandlerFactory_equals_18_1_Test`) | 73 | 23 | 32 % | 96 % | 40 % (39/98) |
+| **C** | B + test manuel (`BasicContentHandlerFactoryManualTest`) | 73 | 24 | **33 %** | 96 % | 41 % (40/98) |
+
+### Mesure B : tests d'origine + tests générés corrigés
+L'ajout de `BasicContentHandlerFactory_equals_18_1_Test` ne change ni le nombre de mutants tués ni la couverture mesurée par PIT. Le score reste à 32 %.
+
+### Mesure C : ajout du test manuel
+Le test manuel `testCreateHandlerWithWriteLimitZero` augmente le nombre de mutants tués de 23 à 24 et la couverture de lignes de 40 % à 41 %. Le score passe de 32 % à 33 %.
+
+| Ligne | Mutant | Test qui le tue | Raison |
+|---|---|---|---|
+| 171 | changed conditional boundary (`< 0` → `<= 0`) | `testCreateHandlerWithWriteLimitZero` | Avec `writeLimit = 0`, l'original retourne un `WriteOutContentHandler`. Le mutant retourne un handler brut. `assertTrue(handler instanceof WriteOutContentHandler)` échoue avec le mutant. |
+
+**Mutants non couverts.** De nombreux mutants restent en NO_COVERAGE, car les tests n'exécutent pas les lignes correspondantes. Des méthodes comme `equals()`, `hashCode()`, `parseHandlerType()` et `isValidateXHTML()` nécessitent des tests ciblés pour exercer davantage de code.
+
+---
 
 ## 4. Documentation des tests manuels
+
+### 4.1 TikaExtrasManualTest
 
 ### Test 1 : `extraJarsAreSortedByFileName`
 **Intention.** Vérifier que `extraJars()` renvoie les jars triés par nom de fichier. Ce tri rend l'ordre de chargement des jars, 
@@ -169,6 +366,58 @@ propre classloader par défaut si aucun n'a été enregistré. Après `install()
 que `install()` a retourné, ce que le test vérifie avec `assertSame`. Sans l'appel, elle renverrait le classloader par défaut, 
 qui est un autre objet.
 **Mutant visé.** Ligne 95, `removed call to ServiceLoader::setContextClassLoader`.
+
+---
+
+### 4.2 PatternsManualTest
+
+### Test 1 : `testAddGlobStoredAndFoundByMatches`
+**Intention.** Vérifier que `add()` route un motif glob complexe vers `addGlob` et que `matches()` retrouve le bon type pour un nom de fichier correspondant.
+**Données de test.** Un motif `isJavaRegex=true` (`".*\\.log"`) passe directement à `addGlob` sans routage (ligne 71). Un motif avec `?` (`"*.t?t"`) est un glob complexe et atteint `addGlob` via la compilation (ligne 83). Les deux chemins sont testés pour couvrir les deux appels supprimés.
+**Oracle.** `matches("app.log")` doit retourner `typeRegex` ; `matches("file.txt")` doit retourner `typeGlob`. Sans l'appel à `addGlob` (mutant lignes 71 ou 83), les deux retournent `null`.
+**Mutants visés.** Lignes 71, 83 : `removed call to addGlob`.
+
+### Test 2 : `testExtensionRoutingAndMatches`
+**Intention.** Vérifier que `add()` route `"*.txt"` vers `addExtension`, que `matches("document.txt")` retourne le bon type, et que `type.getExtensions()` contient `".txt"`.
+**Données de test.** `"*.txt"` est reconnu comme extension simple par `add()` (lignes 74-75). `getExtensions()` n'est peuplé que via `type.addExtension()` (ligne 80), qui n'est appelé que dans la branche extension — pas dans la branche glob. C'est donc un oracle qui distingue les deux chemins de routage.
+**Oracle.** `matches("document.txt")` retourne le type ; `type.getExtensions().contains(".txt")` est vrai. Si `addExtension` est supprimé (ligne 80) ou si la condition de routage est inversée (lignes 74, 75), `matches()` retourne `null` et `getExtensions()` est vide.
+**Mutants visés.** Lignes 74, 75 (negated conditional), 80 (removed call to `addExtension`).
+
+### Test 3 : `testAddConditionsDoNotThrowAndPreserveEntry`
+**Intention.** Vérifier que les conditions de garde dans `add()` et `addName()` / `addExtension()` / `addGlob()` fonctionnent : le premier ajout réussit, et le second ajout d'un type plus spécialisé est un no-op (le type général est conservé).
+**Données de test.** `text/plain` et `text/html` sont choisis car `text/html` est une spécialisation de `text/plain` dans le registre par défaut (`getSupertype()` renvoie `text/plain` pour tout `text/*`). Le motif `"*.t?t"` (glob complexe, pas d'entrée dans la map d'extensions) force le passage par la branche glob pour tester la ligne 117. Le nom de fichier `"file.tat"` est clé : il n'a pas d'extension `.tat` enregistrée, donc il passe par la map glob plutôt que la map extensions.
+**Oracle.** Après les deux ajouts, `matches("Makefile")`, `matches("file.txt")` et `matches("file.tat")` retournent `typePlain`. Inverser les conditions (lignes 90, 102, 108, 117) force le code à lancer une exception ou à retourner `typeHtml`.
+**Mutants visés.** Lignes 90, 102, 108, 117 (negated conditional dans `add()` et ses sous-méthodes).
+
+### Test 4 : `testAddSameObjectTwiceDoesNotThrow`
+**Intention.** Vérifier que la condition `previous == type` fonctionne correctement en enregistrant deux fois le même objet `MimeType` : cela doit être un no-op, pas une exception.
+**Données de test.** Les mutants sur les lignes 92, 107 et 119 transforment `previous == type` en `previous != type`. Avec deux objets différents, la condition `previous != type` est toujours vraie et le `||` court-circuite, rendant la mutation invisible. Seul un objet identique (`==`) expose le mutant : avec la condition inversée, la branche de levée d'exception est atteinte à tort.
+**Oracle.** `patterns.add(pattern, false, type)` appelé deux fois avec le même objet ne doit pas lever d'exception ; `matches()` retourne ensuite le type pour chacun des trois patterns (`"Makefile"`, `"*.log"`, `"*.t?t"`). Avec le mutant, la seconde invocation atteint le `throw` et le test échoue.
+**Mutants visés.** Lignes 92, 107, 119 (negated conditional sur `previous == type`).
+
+### Test 5 : `testCompileProducesCorrectRegex`
+**Intention.** Vérifier que `compile()` traduit correctement chaque méta-caractère glob en regex Java : `?` → `.` (exactement un caractère), `*` → `.*` (zéro ou plusieurs), `.` → `\.` (point littéral).
+**Données de test.** Le motif `"*.t?t"` active les trois règles de traduction. Les cas négatifs `"file.tt"` (zéro char pour `?`), `"file.txxt"` (deux chars) et `"filextxt"` (pas de point) sont choisis pour exposer respectivement une translation incorrecte de `?`, une translation correcte acceptant trop de chars, et l'absence d'échappement du `.`.
+**Oracle.** `matches("file.txt")` et `matches("archive.tAt")` retournent le type ; `matches("file.tt")`, `matches("file.txxt")` et `matches("filextxt")` retournent `null`. Si `compile()` retourne `""` (mutant ligne 187) ou si ses conditions sont inversées (lignes 173, 175, 177, 179), les correspondances deviennent incorrectes.
+**Mutants visés.** Lignes 173, 175, 177, 179 (negated conditional dans `compile()`), ligne 187 (replaced return with `""`).
+
+---
+
+### 4.3 BasicContentHandlerFactoryManualTest
+
+### Test 1 : `testCreateHandlerWithWriteLimitZero`
+**Intention.** Vérifier que `writeLimit = 0` est traité comme une limite active (zéro caractères autorisés), pas comme « illimité », c'est-à-dire que `createHandlerInner()` retourne un `WriteOutContentHandler` et non le handler brut.
+**Données de test.** `0` est la valeur exacte à la frontière de la condition `writeLimit < 0`. Le mutant change `<` en `<=`, rendant `writeLimit = 0` équivalent à « illimité ». Seule cette valeur distingue le code original du mutant. Le type `HANDLER_TYPE.TEXT` est choisi car il ne passe pas par le chemin spécial `BODY` (qui enveloppe toujours dans `WriteOutContentHandler` quelle que soit la valeur de `writeLimit`).
+**Oracle.** `handler instanceof WriteOutContentHandler` doit être vrai. Avec le mutant (`<= 0`), `writeLimit = 0` satisfait la condition et `createHandlerInner()` retourne le handler brut (`ToTextContentHandler`), donc l'assertion échoue.
+**Mutant visé.** Ligne 171 : `changed conditional boundary` (`writeLimit < 0` → `writeLimit <= 0`).
+
+### Test 2 : `testCreateHandlerWithWriteLimitNegativeIsUnlimited`
+**Intention.** Vérifier que `writeLimit = -1` est bien la sentinelle « illimité » et que `createHandlerInner()` retourne le handler brut (sans enveloppe `WriteOutContentHandler`).
+**Données de test.** `-1` est la valeur canonique « aucune limite » dans l'API. Ce test ancre l'autre côté de la frontière : ensemble avec le test 1, il fixe le comportement attendu en `-1` (retour brut) et en `0` (retour enveloppé), rendant impossible un glissement accidentel de la frontière dans l'un ou l'autre sens.
+**Oracle.** `handler instanceof WriteOutContentHandler` doit être faux. Si la frontière était déplacée à `< -1`, ce test le détecterait en retournant un `WriteOutContentHandler` au lieu du handler brut.
+**Mutant visé.** Ligne 171 : `changed conditional boundary` (test complémentaire pour ancrer les deux côtés de la frontière `< 0`).
+
+---
 
 ## 5. Déclaration de l'utilisation de l'IAG
 Déclaration DDIA: Outil d'intelligence artificielle: Claude (Anthropic); 
