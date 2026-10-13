@@ -347,16 +347,15 @@
             <!-- ChatUniTest generated tests -->
             <param>org.apache.tika.config.TikaExtras_extrasDir_3_1_Test</param>
 
-            <param>org.apache.tika.sax.BasicContentHandlerFactory_equals_Test</param>
-            <param>org.apache.tika.sax.BasicContentHandlerFactory_handlerTypeName_11_2_Test.java</param>
-            <param>org.apache.tika.sax.BasicContentHandlerFactory_hashCode_19_0_Test.java</param>
-            <param>org.apache.tika.sax.BasicContentHandlerFactory_newInstance_2_0_Test.java</param>
-            <param>org.apache.tika.sax.BasicContentHandlerFactory_parseHandlerType_3_0_Test.java</param>
+            <param>org.apache.tika.sax.BasicContentHandlerFactory_equals_18_1_Test</param>
+            <param>org.apache.tika.sax.BasicContentHandlerFactory_handlerTypeName_11_2_Test</param>
+            <param>org.apache.tika.sax.BasicContentHandlerFactory_hashCode_19_0_Test</param>
+            <param>org.apache.tika.sax.BasicContentHandlerFactory_newInstance_2_0_Test</param>
+            <param>org.apache.tika.sax.BasicContentHandlerFactory_parseHandlerType_3_0_Test</param>
 
             <param>org.apache.tika.mime.Patterns_add_1_0_Test</param>
             <param>org.apache.tika.mime.Patterns_matches_5_2_Test</param>
 
-            <!-- Manual tests (Mesure C) -->
             <param>org.apache.tika.mime.PatternsManualTest</param>
             <param>org.apache.tika.sax.BasicContentHandlerFactoryManualTest</param>
             <param>org.apache.tika.config.TikaExtrasManualTest</param>

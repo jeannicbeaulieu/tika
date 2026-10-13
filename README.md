@@ -1,3 +1,5 @@
+[![tache2 - tests et mutation (tika-core)](https://github.com/jeannicbeaulieu/tika/actions/workflows/tache2.yml/badge.svg)](https://github.com/jeannicbeaulieu/tika/actions/workflows/tache2.yml)
+
 ## 1. Choix de la classe
 
 ### 1.1 org.apache.tika.config.TikaExtras
@@ -6,14 +8,14 @@
 |---|---|
 | Classe | `org.apache.tika.config.TikaExtras` |
 | Test existant | `TikaExtrasTest` (5 tests, tous réussis) |
-| Couverture JaCoCo des instructions | 81 % |
-| Couverture JaCoCo des branches | 89 % (À COMPLÉTER : vérifier le nombre de branches manquées) |
+| Couverture JaCoCo des instructions | 81 % (44/238 manquant) |
+| Couverture JaCoCo des branches | 89 % (3/28 manquant) |
 | Lignes non couvertes (rouge) | 82, 83, 87, 91, 116, 117, 162, 163, 164 |
 | Lignes partiellement couvertes (jaune) | 86, 90, 122, 157 |
 
 ![Couverture JaCoCo de TikaExtras](images/jacoco_rapport.png)
-![Code de TikaExtras avec les lignes non couvertes](docs/code_tikaextra1.png)
-![Code de TikaExtras avec les lignes non couvertes](docs/code_tikaextra2.png)
+![Code de TikaExtras avec les lignes non couvertes](images/code_tikaextra1.png)
+![Code de TikaExtras avec les lignes non couvertes](images/code_tikaextra2.png)
 
 
 **Justification** Classe courte, sans dépendance lourde, logique claire (conditions, tri, construction
@@ -53,6 +55,8 @@ ne produisent aucun mutant vivant : Pitest ignore par défaut les appels aux bib
 | Couverture JaCoCo des instructions | 83 % (63/388 manquant) |
 | Couverture JaCoCo des branches | 65 % (22/64 manquant) |
 
+![Couverture JaCoCo de Patterns](images/jacoco_pattern.png)
+
 **Justification** Classe de taille raisonnable avec une logique de routage interne (`add()` dispatche vers `addName`, `addExtension` ou `addGlob`) et une compilation glob-vers-regex. Les tests existants vérifient `matches()` sur quelques cas mais ignorent le routage interne et les conditions de remplacement, laissant de nombreux mutants vivants.
 
 **Preuve de mutants vivants (mesure A).** Pitest, avec uniquement `PatternsTest` :
@@ -73,6 +77,8 @@ Mutants vivants (17 SURVIVED) — les plus significatifs :
 | 90, 102, 108, 117 | negated conditional dans `add()` / `addName()` | SURVIVED | aucun test ne tente d'ajouter deux types pour le même motif |
 | 173, 175, 177, 179, 187 | negated conditional / replaced return in `compile()` | SURVIVED | `testAdd()` n'exerce pas la compilation glob-vers-regex |
 
+> Le rapport Pitest complet (mesures A, B et C) et les captures des mutants vivants sont présentés à la **section 3.2**.
+
 ---
 
 ### 1.3 org.apache.tika.sax.BasicContentHandlerFactory
@@ -83,6 +89,8 @@ Mutants vivants (17 SURVIVED) — les plus significatifs :
 | Test existant | `BasicContentHandlerFactoryTest` (5 tests : testBody, testText, testHTML, testXML, testIgnore) |
 | Couverture JaCoCo des instructions | 50 % (227/459 manquant) |
 | Couverture JaCoCo des branches | 38 % (39/63 manquant) |
+
+![Couverture JaCoCo de BasicContentHandlerFactory](images/jacoco_BasicContentHandlerFactory.png)
 
 **Justification** La classe encapsule la création de handlers SAX avec une limite d'écriture (`writeLimit`). Les tests existants couvrent les types de handlers mais n'exercent pas la condition frontière `writeLimit < 0`, laissant des mutants vivants sur cette ligne.
 
@@ -100,6 +108,8 @@ Mutant vivant significatif :
 |---|---|---|---|
 | 171 | changed conditional boundary (`writeLimit < 0` → `<= 0`) | SURVIVED | les tests utilisent `writeLimit = -1` (illimité) ou `writeLimit > 0` (limité) ; la valeur frontière `0` n'est jamais testée |
 
+> Le rapport Pitest complet (mesures A, B et C) et la capture des mutants vivants sont présentés à la **section 3.3**.
+
 ---
 
 **Justification du choix des classes.** Les classes `org.apache.tika.mime.Patterns` et `org.apache.tika.sax.BasicContentHandlerFactory` ont été sélectionnées parce que leurs tests existants ne couvrent pas suffisamment le code et ne détectent pas toutes les mutations. Pour Patterns, la couverture initiale des instructions est de 83 %, la couverture des branches est de 65 % et PIT rapporte 12 mutants tués sur 44, soit un score de mutation de 27 %. Pour BasicContentHandlerFactory, la couverture des instructions est de 50 %, celle des branches est de 38 % et PIT rapporte 23 mutants tués sur 73, soit un score de mutation d'environ 32 %. Ces résultats montrent qu'il reste des possibilités d'amélioration des tests.
@@ -108,7 +118,49 @@ Mutant vivant significatif :
 
 ## 2. Génération des tests
 
-### 2.1 Exécution sans intervention manuelle
+### 2.0 Installation et configuration de ChatUniTest
+
+**Environnement**
+
+| Élément | Version |
+|---|---|
+| ChatUniTest | `io.github.zju-aces-ise:chatunitest-maven-plugin:2.1.1` |
+| Modèle local | `codeqwen:v1.5-chat` via Ollama (`http://localhost:11434`) |
+| Maven | wrapper `mvnw` du projet |
+
+**Configuration dans `tika-core/pom.xml`**
+
+```xml
+<plugin>
+  <groupId>io.github.zju-aces-ise</groupId>
+  <artifactId>chatunitest-maven-plugin</artifactId>
+  <version>2.1.1</version>
+  <configuration>
+    <apiKeys>xxx</apiKeys>                                        <!-- ignorée par Ollama -->
+    <model>codeqwen:v1.5-chat</model>
+    <url>http://localhost:11434/v1/chat/completions</url>         <!-- API compatible OpenAI d'Ollama -->
+    <testNumber>3</testNumber>
+    <maxRounds>5</maxRounds>
+    <thread>false</thread>
+    <tmpOutput>${project.build.directory}/chatunitest-info</tmpOutput>
+    <testOutput>${project.basedir}/chatunitest</testOutput>
+  </configuration>
+</plugin>
+```
+
+**Commande utilisée** (une par classe) :
+
+```bash
+mvn chatunitest:class -DselectClass=org.apache.tika.config.TikaExtras
+```
+
+Remplacer `-DselectClass` par `org.apache.tika.mime.Patterns` ou `org.apache.tika.sax.BasicContentHandlerFactory` pour les autres classes.
+
+**Sorties** : les fichiers générés sont déposés dans `tika-core/chatunitest/tika-parent/tika-core/org/apache/tika/`. ChatUniTest n'est pas exécuté dans la GitHub Action — les tests générés (corrigés) sont commités directement dans `src/test/java/`.
+
+---
+
+### 2.1 TikaExtras — Exécution sans intervention manuelle
 
 Les deux classes de test (sans la Suite) ont été copiées telles quelles dans
 `tika-core/src/test/java/org/apache/tika/config/`.
@@ -116,7 +168,7 @@ Les deux classes de test (sans la Suite) ont été copiées telles quelles dans
 - **Avec checkstyle activé**, le build s'arrête à la phase `validate` : 31 violations lors de la première
   exécution. Lors d'une seconde exécution, sans modification de notre part, il n'en restait que 8, toutes de la
   même règle (imports avec `.*` interdits, 4 par fichier). Hypothèse : Spotless, exécuté par le build de Tika,
-  a corrigé automatiquement l'en-tête, l'ordre et les imports inutilisés (À CONFIRMER : `docs/spotless-diff.txt`).
+  a corrigé automatiquement l'en-tête, l'ordre et les imports inutilisés.
   Les tests ne passent donc pas sans intervention.
 - **Avec checkstyle désactivé** (`-Dcheckstyle.skip=true`), les deux fichiers compilent et 5 tests s'exécutent :
 
@@ -125,7 +177,7 @@ Les deux classes de test (sans la Suite) ont été copiées telles quelles dans
 | `TikaExtras_extrasDir_3_1_Test` | 1 | 1 | 0 |
 | `TikaExtras_appendJarsToClasspath_2_1_Test` | 4 | 0 | 4 |
 
-### 2.2 Explication et critique des tests générés
+### 2.2 TikaExtras — Explication et critique des tests générés
 
 **`TikaExtras_extrasDir_3_1_Test`.** Ce fichier contient un seul test. Il définit la propriété `tika.extras.dir` 
 à `"   "` et vérifie avec `assertNull` que `extrasDir()` renvoie `null`.
@@ -147,7 +199,7 @@ mocks et non le code de `TikaExtras` :
 - Ils créent un mock de la classe testée, qui n'a que des méthodes statiques. L'instance passée à `invoke` est donc ignorée et le mock ne sert à rien.
 - Deux tests répètent ce que `appendJarsToClasspathOffReturnsInput` vérifie déjà dans `TikaExtrasTest`.
 
-### 2.3 Comparaison des oracles
+### 2.3 TikaExtras — Comparaison des oracles
 
 | Critère | Tests originaux (`TikaExtrasTest`) | Tests générés |
 |---|---|---|
@@ -176,9 +228,15 @@ Les fichiers générés (sans la Suite) ont été copiés dans `tika-core/src/te
 
 | Test | Erreur | Correction |
 |---|---|---|
-| `testAddName` | `assertEquals(type2, ...)` — `addName` est un no-op quand les deux types sont sans relation de sous-type ; `type1` reste | `assertEquals(type2, ...)` → `assertEquals(type1, ...)` |
+| `testAddName` | `assertEquals(type2, ...)` — `addName` est un no-op quand `type2` est une spécialisation de `type1` (la branche `isSpecializationOf(type, previous)` ne remplace pas) ; `type1` reste | `assertEquals(type2, ...)` → `assertEquals(type1, ...)` |
 | `testAddExtension` | Pattern `"txt"` sans wildcard → route vers `addName`, jamais vers `addExtension` ; clé `"txt"` incorrecte (la méthode stocke `".txt"`) ; assertions contradictoires sur la même clé | Pattern → `"*.txt"`, clé → `".txt"`, `assertNull` contradictoire → vérification d'une clé absente (`".html"`) |
 | `testAddGlob` | Pattern `"*.txt"` avec `isJavaRegex=false` → route vers `addExtension`, jamais vers globs ; assertions contradictoires | `isJavaRegex` → `true` pour forcer le stockage direct dans globs ; correction de l'`assertNull` contradictoire |
+
+**`Patterns_matches_5_2_Test`.** Ce fichier contient 4 tests, tous passés sans correction. Il injecte l'état interne (`names`, `extensions`, `globs`, `minExtensionLength`, `maxExtensionLength`) par réflexion, avec des mocks Mockito pour `MimeType` et `MediaTypeRegistry`.
+
+Les tests ont plusieurs défauts. `testMatchesGlobMatch` est une copie exacte de `testMatchesExtensionMatch` (mêmes entrées, même oracle) — il ne teste pas le chemin des globs : les clés `"glob1"` et `"glob2"` injectées dans la map ne correspondent pas à `"name1.ext1"` comme regex Java, donc la boucle ne les atteint jamais. Le stub `when(mimeType1.getName()).thenReturn("name1")` est inutile, car `matches()` n'appelle pas `getName()`. Enfin, la dépendance à la réflexion sur les noms de champs privés rend les tests fragiles à un renommage interne.
+
+Ces tests ne tuent aucun mutant supplémentaire par rapport à mesure A, car ils n'exercent que les branches de correspondance déjà couvertes par `PatternsTest`.
 
 ### 2.6 Patterns — Comparaison des oracles
 
@@ -223,6 +281,14 @@ ChatUniTest a commis deux erreurs distinctes :
 | 5 | 68 | `factory1.equals(validateXHTMLField.get(factory1))` — compare à un `Boolean` | → `assertEquals(validateXHTMLField.get(factory1), validateXHTMLField.get(factory2))` |
 | 6 | 74–75 | `factory1.equals(getFormatHandlerMethod.invoke(factory1))` — compare à un `ContentHandler` | → `assertEquals(...invoke(factory1).getClass(), ...invoke(factory2).getClass())` |
 
+**`BasicContentHandlerFactory_handlerTypeName_11_2_Test`.** 2 tests, aucune correction nécessaire. Teste `handlerTypeName()` sur les types MARKDOWN et HTML — oracle simple et juste. Le second test (`testHandlerTypeNameWithParseContext`) injecte un `ParseContext` mais n'en tire rien : `handlerTypeName()` ne lit pas le contexte. Le test est un doublon du premier.
+
+**`BasicContentHandlerFactory_hashCode_19_0_Test`.** 4 tests, aucune correction nécessaire. `testHashCode` appelle `hashCode()` deux fois et vérifie qu'ils sont égaux — n'importe quelle implémentation retournant une constante passerait ce test. `testConstructor` vérifie uniquement `assertNotNull` sur les trois constructeurs, sans inspecter l'état construit. `testSetters` et `testGetters` sont identiques (mêmes données, mêmes assertions) — doublon complet. Le mock `ParseContext` injecté via `@InjectMocks` est inutile pour ces tests.
+
+**`BasicContentHandlerFactory_newInstance_2_0_Test`.** 2 tests, aucune correction nécessaire. Utilise des mocks pour simuler `OutputLimits` dans un `ParseContext` et vérifie le type, `writeLimit` et `parseContext` du résultat. Le design est correct, bien que `parseContext` soit lu par réflexion faute de getter public. Ne vérifie pas le handler réellement créé par la factory.
+
+**`BasicContentHandlerFactory_parseHandlerType_3_0_Test`.** 5 tests, aucune correction nécessaire. Appelle `parseHandlerType()` par réflexion alors que la méthode est publique — complexité inutile. Couvre les cas `"md"`, `"invalid"`, `null` et `""` avec des oracles corrects. Le cinquième test (`testParseHandlerTypeLowerCase`) a un **corps vide** : il déclare des variables mais n'appelle ni `invoke` ni `assert` — il passe toujours sans rien vérifier. Les cas `"xml"`, `"html"`, `"text"`, `"body"` et `"ignore"` ne sont pas testés.
+
 ### 2.9 BasicContentHandlerFactory — Comparaison des oracles
 
 | Critère | Tests originaux (`BasicContentHandlerFactoryTest`) | Tests générés |
@@ -239,6 +305,13 @@ ChatUniTest a commis deux erreurs distinctes :
 
 ## 3. Mutation
 
+#### Mesure A
+![Rapport Pitest global, mesure A](images/pitest_all_mesureA.png)
+#### Mesure B
+![Rapport Pitest global, mesure B](images/pitest_all_mesureB.png)
+#### Mesure C
+![Rapport Pitest global, mesure C](images/pitest_all_mesureC.png)
+
 ### 3.1 TikaExtras
 
 | Mesure | Tests utilisés | Couverture de lignes | Score de mutation | Force des tests |
@@ -247,17 +320,8 @@ ChatUniTest a commis deux erreurs distinctes :
 | **B** | A + test généré par ChatUniTest (1 test) | 86 % (50/58) | 81 % (17/21) | 85 % |
 | **C** | B + 4 tests écrits à la main | 88 % (51/58) | **100 %** (21/21) | **100 %** |
 
-#### Mesure A
-![Rapport Pitest, mesure A](images/pit_test_coverage_report_A.png)
-#### Mesure B
-![Rapport Pitest, mesure B](images/pit_test_coverage_report_B.png)
-#### Mesure C
-![Rapport Pitest, mesure C](images/pit_test_coverage_report_C.png)
-
 ### Mesure B : tests d'origine + test généré
-La couverture de lignes passe de 83% à 86%, mais le score de mutation reste à 81%.
-La raison est que ce test n'exécute que extrasDir(), alors que les mutants vivants sont dans install() et extraJars(). 
-Autrement dit, le test de l'IA fait exécuter un peu plus de code, mais ne détecte aucun défaut de plus. Les trois autres fichiers générés ont été écartés.
+**Les tests générés ne tuent aucun mutant supplémentaire.** La couverture de lignes passe de 83 % à 86 %, mais le score de mutation reste à 81 %. Le seul test retenu (`TikaExtras_extrasDir_3_1_Test`) n'exécute que `extrasDir()`, alors que les 4 mutants vivants sont dans `install()` et `extraJars()` — méthodes jamais atteintes par ce test. Le fichier `TikaExtras_appendJarsToClasspath_2_1_Test` (4 tests, 4 erreurs) a été écarté et n'est pas intégré au projet. Les trois autres fichiers générés ont également été écartés.
 
 ### Mesure C
 Le score de mutation passe à 100 % (21 mutants sur 21) et la couverture de lignes à 88 %.
@@ -272,8 +336,12 @@ Le score de mutation passe à 100 % (21 mutants sur 21) et la couverture de lign
 | **B** | A + tests générés corrigés (`Patterns_add_1_0_Test`) | 44 | 12 | 27 % | 41 % | 74 % (57/77) |
 | **C** | B + tests manuels (`PatternsManualTest`) | 44 | 44 | **100 %** | **100 %** | **100 %** (77/77) |
 
+#### Mesure A
+![Mutants vivants de Patterns, mesure A (1/2)](images/pitest_Patterns_mutation_mesureA.1.png)
+![Mutants vivants de Patterns, mesure A (2/2)](images/pitest_Patterns_mutation_mesureA.2.png)
+
 ### Mesure B : tests d'origine + tests générés corrigés
-Le score de mutation reste à 27 %. Les tests générés corrigés vérifient l'état interne des maps par réflexion mais ne testent pas `matches()` — les mutations sur le routage et la compilation restent invisibles.
+**Les tests générés ne tuent aucun mutant supplémentaire.** Le score reste à 27 %. Les tests corrigés vérifient l'état interne des maps par réflexion mais n'appellent jamais `matches()` — les mutations sur le routage et la compilation ne produisent aucun effet observable, et tous les mutants survivants de mesure A restent vivants.
 
 ### Mesure C : ajout des tests manuels
 Le score de mutation passe à 100 % (44 mutants sur 44) et la couverture de lignes à 100 % (77/77). Les tests manuels appellent `matches(filename)` après `add()` et vérifient le type MIME retourné, ce qui rend toutes les mutations de routage, de stockage et de compilation observables.
@@ -294,20 +362,46 @@ Le score de mutation passe à 100 % (44 mutants sur 44) et la couverture de lign
 | Mesure | Tests utilisés | Mutants générés | Tués | Score | Force des tests | Couv. lignes |
 |---|---|---|---|---|---|---|
 | **A** | `BasicContentHandlerFactoryTest` | 73 | 23 | 32 % | 96 % | 40 % (39/98) |
-| **B** | A + tests générés corrigés (`BasicContentHandlerFactory_equals_18_1_Test`) | 73 | 23 | 32 % | 96 % | 40 % (39/98) |
-| **C** | B + test manuel (`BasicContentHandlerFactoryManualTest`) | 73 | 24 | **33 %** | 96 % | 41 % (40/98) |
+| **B** | A + tests générés corrigés (5 fichiers) | 73 | 45 | **62 %** | 78 % | — |
+| **C** | B + test manuel (`BasicContentHandlerFactoryManualTest`) | 73 | 46 | **63 %** | 79 % | — |
+
+#### Mesure A
+![Mutants vivants de BasicContentHandlerFactory, mesure A](images/pitest_BasicContentHandlerFactory_mutation_mesureA.png)
 
 ### Mesure B : tests d'origine + tests générés corrigés
-L'ajout de `BasicContentHandlerFactory_equals_18_1_Test` ne change ni le nombre de mutants tués ni la couverture mesurée par PIT. Le score reste à 32 %.
+Les tests générés tuent **22 mutants supplémentaires** (23 → 45), en couvrant des méthodes entièrement ignorées en mesure A : `equals()`, `hashCode()`, `newInstance()`, `parseHandlerType()`, `handlerTypeName()`, `getType()`, `getWriteLimit()`, `isThrowOnWriteLimitReached()`, `isValidateXHTML()` et le chemin du constructeur 4-arg qui vérifie `throwOnWriteLimitReached == false`. Le score passe de 32 % à 62 %.
+
+| Ligne(s) | Méthode | Mutants tués | Test généré | Raison de la détection |
+|---|---|---|---|---|
+| 314–321 | `equals()` | 10 (negated conditionals, wrong returns) | `equals_18_1_Test` | le test compare des factories égales et inégales ; toute mutation sur les comparaisons ou les retours produit un résultat inversé, détecté par `assertTrue`/`assertFalse` |
+| 131, 132, 151, 153 | `parseHandlerType()` | 4 (negated null-check, null returns) | `parseHandlerType_3_0_Test` | les cas `null`, `"md"` et `"invalid"` sont testés avec des assertions sur le type retourné ; retourner `null` ou court-circuiter la vérification `null` échoue les assertions |
+| 116 | `newInstance()` | 1 (null return) | `newInstance_2_0_Test` | le test utilise la factory retournée (`factory.getType()`, `factory.getWriteLimit()`) ; retourner `null` provoque un NPE immédiat |
+| 260 | `handlerTypeName()` | 1 (return `""`) | `handlerTypeName_11_2_Test` | `assertEquals("MARKDOWN", factory.handlerTypeName())` détecte tout retour incorrect |
+| 255, 280 | `getType()`, `getWriteLimit()` | 2 (null return, return 0) | `hashCode_19_0_Test` | `testGetters` vérifie le type et la writeLimit de la factory construite ; les valeurs mutées échouent les assertions |
+| 101, 293 | `isValidateXHTML()`, `isThrowOnWriteLimitReached()` | 2 (wrong boolean) | `hashCode_19_0_Test` | `testGetters` vérifie les booléens ; retourner `true` pour `validateXHTML` (défaut `false`) ou `false` pour `throwOnWriteLimitReached` (défaut `true`) échoue les assertions |
+| 191 | `getFormatHandler()` MARKDOWN | 1 (null return) | `newInstance_2_0_Test` | les tests utilisant le type MARKDOWN exercent le chemin vers `getFormatHandler()` ; retourner `null` cause un NPE dans `createHandlerInner()` |
+| 81 | constructeur 4-arg | 1 (negated conditional) | `newInstance_2_0_Test` | `newInstance()` appelle le constructeur 4-arg ; la mutation inverse la garde sur `throwOnWriteLimitReached`, déclenchant une `IllegalArgumentException` inattendue |
+
+Cependant, 13 mutants **survivent** (contre 1 en mesure A) : les tests de `hashCode()` ne vérifient que la cohérence (même objet → même résultat), n'importe quelle constante passerait, ce qui laisse 10 mutations vivantes dans cette méthode ; le retour `false` de `isValidateXHTML()` et le retour `true` de `isThrowOnWriteLimitReached()` survivent car les tests n'assertent que l'une des deux valeurs. La frontière `writeLimit < 0` (ligne 171) reste vivante : aucun test n'utilise `writeLimit = 0`.
+
+> **Note sur les métriques.** Le score de mutation (62 %) mesure `mutants tués / total` (45/73). La force des tests (78 %) mesure `mutants tués / mutants couverts` (45/58) — 15 mutants restent sans couverture, tous dans les chemins `createHandler(OutputStream, Charset)` pour les types XML, MARKDOWN et IGNORE, ainsi que dans les cas intermédiaires de `parseHandlerType()` (xml, html, text, body, ignore).
 
 ### Mesure C : ajout du test manuel
-Le test manuel `testCreateHandlerWithWriteLimitZero` augmente le nombre de mutants tués de 23 à 24 et la couverture de lignes de 40 % à 41 %. Le score passe de 32 % à 33 %.
+Le test manuel `testCreateHandlerWithWriteLimitZero` augmente le nombre de mutants tués de 45 à 46. Le score passe de 62 % à 63 %.
 
 | Ligne | Mutant | Test qui le tue | Raison |
 |---|---|---|---|
 | 171 | changed conditional boundary (`< 0` → `<= 0`) | `testCreateHandlerWithWriteLimitZero` | Avec `writeLimit = 0`, l'original retourne un `WriteOutContentHandler`. Le mutant retourne un handler brut. `assertTrue(handler instanceof WriteOutContentHandler)` échoue avec le mutant. |
 
-**Mutants non couverts.** De nombreux mutants restent en NO_COVERAGE, car les tests n'exécutent pas les lignes correspondantes. Des méthodes comme `equals()`, `hashCode()`, `parseHandlerType()` et `isValidateXHTML()` nécessitent des tests ciblés pour exercer davantage de code.
+**Mutants survivants (12).** Tous se trouvent dans des méthodes maintenant couvertes mais insuffisamment vérifiées :
+
+| Lignes | Méthode | Mutants | Raison de la survie |
+|---|---|---|---|
+| 329–333 | `hashCode()` (10 mutants) | SURVIVED | `testHashCode` vérifie seulement `h1 == h2` — tout retour constant passe |
+| 101 | `isValidateXHTML()` return false | SURVIVED | le test appelle `setValidateXHTML(true)` et vérifie `true`, jamais la valeur par défaut `false` |
+| 293 | `isThrowOnWriteLimitReached()` return true | SURVIVED | le test vérifie uniquement le retour de `false`, pas celui de `true` |
+
+**Mutants non couverts (15).** Dans `parseHandlerType()` (cas xml, html, text, body, ignore — lignes 138–148) et dans `createHandler(OutputStream, Charset)` pour les types XML, MARKDOWN et IGNORE (lignes 189, 193, 204, 220, 223, 226, 238, 240, 242). Aucun n'est équivalent ; ils sont simplement dans des chemins non atteints par les tests actuels.
 
 ---
 

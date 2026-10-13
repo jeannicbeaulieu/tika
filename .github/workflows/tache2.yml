@@ -1,0 +1,41 @@
+name: tache2 - tests et mutation (tika-core)
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          java-version: '17'
+          distribution: 'temurin'
+          cache: maven
+
+      - name: Compile and run all tika-core tests
+        run: ./mvnw -B -pl tika-core -am install -Drat.skip -Dcheckstyle.skip -Dforbiddenapis.skip
+
+      - name: Run new tests only
+        run: >
+          ./mvnw -B -pl tika-core surefire:test
+          -Drat.skip -Dcheckstyle.skip -Dforbiddenapis.skip
+          "-Dtest=TikaExtras_extrasDir_3_1_Test,TikaExtrasManualTest,Patterns_add_1_0_Test,Patterns_matches_5_2_Test,PatternsManualTest,BasicContentHandlerFactory_equals_18_1_Test,BasicContentHandlerFactory_handlerTypeName_11_2_Test,BasicContentHandlerFactory_hashCode_19_0_Test,BasicContentHandlerFactory_newInstance_2_0_Test,BasicContentHandlerFactory_parseHandlerType_3_0_Test,BasicContentHandlerFactoryManualTest"
+
+      - name: Run pitest mutation analysis
+        run: ./mvnw -B -pl tika-core org.pitest:pitest-maven:mutationCoverage -Drat.skip -Dcheckstyle.skip -Dforbiddenapis.skip
+
+      - name: Upload pitest report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: rapport-pitest
+          path: tika-core/target/pit-reports/
