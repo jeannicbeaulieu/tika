@@ -1,5 +1,7 @@
 [![tache2 - tests et mutation (tika-core)](https://github.com/jeannicbeaulieu/tika/actions/workflows/tache2.yml/badge.svg)](https://github.com/jeannicbeaulieu/tika/actions/workflows/tache2.yml)
 
+[Lien vers une exécution réussie](https://github.com/jeannicbeaulieu/tika/actions/runs/38349732886)
+
 ## 1. Choix de la classe
 
 ### 1.1 org.apache.tika.config.TikaExtras
