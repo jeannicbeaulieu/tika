@@ -365,7 +365,7 @@ Le score de mutation passe à 100 % (44 mutants sur 44) et la couverture de lign
 |---|---|---|---|---|---|---|
 | **A** | `BasicContentHandlerFactoryTest` | 73 | 23 | 32 % | 96 % | 40 % (39/98) |
 | **B** | A + tests générés corrigés (5 fichiers) | 73 | 45 | **62 %** | 78 % | — |
-| **C** | B + test manuel (`BasicContentHandlerFactoryManualTest`) | 73 | 46 | **63 %** | 79 % | — |
+| **C** | B + test manuel (`BasicContentHandlerFactoryManualTest`) | 73 | 46 | **63 %** | 79 % | 79 % (77/98) |
 
 #### Mesure A
 ![Mutants vivants de BasicContentHandlerFactory, mesure A](images/pitest_BasicContentHandlerFactory_mutation_mesureA.png)
