@@ -19,13 +19,14 @@ name: main jdk17 build
 
 on:
   pull_request:
-    branches: [ main ]
+    branches: [ main, tache3 ]
     paths-ignore:
       - 'docs/**'
   push:
-    branches: [ main ]
+    branches: [ main, tache3 ]
     paths-ignore:
       - 'docs/**'
+  workflow_dispatch:
 
 jobs:
   build:
@@ -48,6 +49,7 @@ jobs:
       - name: Build with Maven
         run: mvn clean apache-rat:check test install javadoc:aggregate -Pci -B "-Dorg.slf4j.simpleLogger.log.org.apache.maven.cli.transfer.Slf4jMavenTransferListener=warn"
 
+
   e2e-tests:
     runs-on: ubuntu-latest
     timeout-minutes: 30
@@ -66,3 +68,86 @@ jobs:
           cache: 'maven'
       - name: Run E2E Tests
         run: mvn -pl tika-e2e-tests -am clean verify -Pe2e -B "-Dorg.slf4j.simpleLogger.log.org.apache.maven.cli.transfer.Slf4jMavenTransferListener=warn"
+
+  semgrep:
+    name: Semgrep - fail on new vulnerabilities
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    permissions:
+      contents: read
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install Semgrep
+        run: pip install semgrep
+
+      - name: Determine baseline commit
+        env:
+          EVENT: ${{ github.event_name }}
+          PR_BASE: ${{ github.event.pull_request.base.sha }}
+          PUSH_BEFORE: ${{ github.event.before }}
+        run: |
+          if [ "$EVENT" = "pull_request" ]; then
+            BASE="$PR_BASE"
+          else
+            BASE="$PUSH_BEFORE"
+          fi
+
+          if [ -z "$BASE" ] ||
+             ! git cat-file -e "$BASE^{commit}" 2>/dev/null; then
+            echo "::error::Unable to find a valid baseline commit."
+            exit 1
+          fi
+
+          echo "Baseline commit: $BASE"
+          echo "BASE=$BASE" >> "$GITHUB_ENV"
+
+      - name: Scan for new findings
+        run: |
+          set +e
+          semgrep scan \
+            --config p/java \
+            --baseline-commit "$BASE" \
+            --metrics=off \
+            --error \
+            --json-output=semgrep-new.json \
+            --sarif-output=semgrep-new.sarif \
+            --text-output=semgrep-new.txt \
+            .
+          STATUS=$?
+          set -e
+
+          cat semgrep-new.txt || true
+          echo "Semgrep exit code: $STATUS"
+          exit "$STATUS"
+
+      - name: Add scan summary
+        if: always()
+        env:
+          BASE: ${{ env.BASE }}
+        run: |
+          if [ -f semgrep-new.json ]; then
+            COUNT=$(jq '.results | length' semgrep-new.json)
+            echo "### Semgrep results" >> "$GITHUB_STEP_SUMMARY"
+            echo "Baseline: ${BASE:0:7}" >> "$GITHUB_STEP_SUMMARY"
+            echo "New findings: $COUNT" >> "$GITHUB_STEP_SUMMARY"
+          else
+            echo "Semgrep report was not generated." >> "$GITHUB_STEP_SUMMARY"
+          fi
+
+      - name: Upload Semgrep reports
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: semgrep-reports
+          path: semgrep-new.*
+          if-no-files-found: warn
