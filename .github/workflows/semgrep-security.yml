@@ -1,0 +1,57 @@
+name: Semgrep Security Check
+
+on:
+  push:
+    branches: [ tache3, main ]
+  pull_request:
+    branches: [ tache3, main ]
+
+jobs:
+  semgrep:
+    name: Semgrep – fail on new vulnerabilities
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+
+    steps:
+      - name: Checkout (full history for baseline diff)
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Install Semgrep
+        run: pip install semgrep
+
+      - name: Determine baseline commit
+        id: baseline
+        run: |
+          if [ "${{ github.event_name }}" = "pull_request" ]; then
+            BASELINE="${{ github.event.pull_request.base.sha }}"
+          else
+            BASELINE="${{ github.event.before }}"
+          fi
+          # New branch push has an all-zeros "before" SHA – fall back to parent commit
+          if [ "$BASELINE" = "0000000000000000000000000000000000000000" ]; then
+            BASELINE="$(git rev-parse HEAD~1 2>/dev/null || git rev-parse HEAD)"
+          fi
+          echo "ref=$BASELINE" >> $GITHUB_OUTPUT
+          echo "Baseline commit: $BASELINE"
+
+      - name: Run Semgrep – report only new findings
+        run: |
+          semgrep \
+            --config=auto \
+            --baseline-commit=${{ steps.baseline.outputs.ref }} \
+            --json \
+            --output=semgrep-new-findings.json \
+            --error \
+            . || EXIT=$?
+          echo "Semgrep exit code: ${EXIT:-0}"
+          exit ${EXIT:-0}
+
+      - name: Upload findings report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: semgrep-new-findings
+          path: semgrep-new-findings.json
