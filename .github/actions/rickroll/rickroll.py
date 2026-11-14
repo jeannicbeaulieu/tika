@@ -26,8 +26,9 @@ import urllib.request
 import xml.etree.ElementTree as ET
 
 VIDEO_URL = "https://www.youtube.com/watch?v=dQw4w9WgXcQ"
-# Même GIF que l'action d'origine TejasvOnly/random-rickroll.
 
+GIF_URL = ("https://user-images.githubusercontent.com/37572049/"
+           "90699500-0cc3ec00-e2a1-11ea-8d13-989526e86b0e.gif")
 
 def env(name, default=""):
     return os.environ.get(name, default).strip()
@@ -99,7 +100,6 @@ def comment_on_pr(body):
         with urllib.request.urlopen(req, timeout=20):
             print("Commentaire rickroll publié sur la PR #" + number)
     except (urllib.error.URLError, OSError) as e:
-        # p. ex. PR provenant d'un fork : jeton en lecture seule. Ce n'est pas bloquant.
         print(f"::warning::Impossible de commenter la PR #{number} : {e}")
 
 
@@ -121,7 +121,6 @@ def main():
         set_output("rickrolled", "false")
         return 0
 
-    print(BANNER)
     print(f"{len(failures)} cas de test en échec.")
     print(f"::error title=Tests en échec ({len(failures)})::"
           f"Rapport détaillé des échecs : {VIDEO_URL}")
@@ -135,7 +134,6 @@ def main():
         comment_on_pr(body)
 
     set_output("rickrolled", "true")
-    # L'action elle-même réussit : c'est l'étape de test qui fait échouer le job.
     return 0
 
 
