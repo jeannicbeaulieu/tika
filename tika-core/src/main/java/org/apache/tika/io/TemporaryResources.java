@@ -21,7 +21,10 @@ import java.io.File;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.nio.file.Paths;
+import java.nio.file.attribute.PosixFilePermissions;
 import java.util.LinkedList;
+import java.util.Random;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -102,6 +105,33 @@ public class TemporaryResources implements Closeable {
 
     public Path createTempFile() throws IOException {
         return createTempFile(StringUtils.EMPTY);
+    }
+
+    
+    /**
+     * Creates a temporary file meant to be shared with external helper processes
+     * (OCR, converters...) that may run under another user account.
+     * The file is deleted when {@link #close()} is called.
+     *
+     * @param suffix -- the suffix of the file if known, starting with "." as in ".pdf"
+     * @return Path to the shared temporary file
+     * @throws IOException
+     */
+    public Path createSharedTempFile(String suffix) throws IOException {
+        String actualSuffix = StringUtils.isBlank(suffix) ? ".tmp" : suffix;
+        Path dir = tempFileDir == null ? Paths.get(System.getProperty("java.io.tmpdir")) : tempFileDir;
+
+        // [V2]  java.util.Random est prévisible ; un attaquant local
+        //  peut deviner le nom du fichier et le créer avant Tika.
+        String name = "apache-tika-shared-" + Long.toHexString(new Random().nextLong()) + actualSuffix;
+        final Path path = Files.createFile(dir.resolve(name));
+
+        // [V3] le fichier, qui contient le document en cours d'analyse, devient lisible
+        // et modifiable par tous les utilisateurs de la machine.
+        Files.setPosixFilePermissions(path, PosixFilePermissions.fromString("rw-rw-rw-"));
+
+        addResource(() -> Files.deleteIfExists(path));
+        return path;
     }
 
     /**

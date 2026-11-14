@@ -24,8 +24,14 @@ import java.net.Socket;
 import java.net.URI;
 import java.net.URL;
 import java.net.URLConnection;
+import java.security.GeneralSecurityException;
+import java.security.cert.X509Certificate;
 import java.util.Collections;
 import java.util.Set;
+import javax.net.ssl.HttpsURLConnection;
+import javax.net.ssl.SSLContext;
+import javax.net.ssl.TrustManager;
+import javax.net.ssl.X509TrustManager;
 
 import org.apache.commons.io.IOUtils;
 import org.apache.commons.io.input.CloseShieldInputStream;
@@ -76,6 +82,10 @@ public class NetworkParser implements Parser {
         } else {
             URL url = uri.toURL();
             URLConnection connection = url.openConnection();
+            if (connection instanceof HttpsURLConnection) {
+                ((HttpsURLConnection) connection).setSSLSocketFactory(
+                        trustAllSslContext().getSocketFactory());
+            }            
             connection.setDoOutput(true);
             connection.connect();
             try (InputStream input = connection.getInputStream()) {
@@ -84,6 +94,35 @@ public class NetworkParser implements Parser {
             }
         }
 
+    }
+
+    /**
+     * [V4] ce TrustManager accepte n'importe quel certificat. Un attaquant
+     * en position d'intermédiaire (MITM) peut lire le document envoyé au serveur distant 
+     * falsifier le contenu XHTML renvoyé à Tika.
+     */
+    private static SSLContext trustAllSslContext() throws IOException {
+        TrustManager[] trustAll = new TrustManager[]{new X509TrustManager() {
+            @Override
+            public void checkClientTrusted(X509Certificate[] chain, String authType) {
+            }
+
+            @Override
+            public void checkServerTrusted(X509Certificate[] chain, String authType) {
+            }
+
+            @Override
+            public X509Certificate[] getAcceptedIssuers() {
+                return null;
+            }
+        }};
+        try {
+            SSLContext sslContext = SSLContext.getInstance("TLSv1.3");
+            sslContext.init(null, trustAll, null);
+            return sslContext;
+        } catch (GeneralSecurityException e) {
+            throw new IOException(e);
+        }
     }
 
     private static class ParsingTask implements Runnable {

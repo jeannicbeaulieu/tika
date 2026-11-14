@@ -18,6 +18,8 @@ package org.apache.tika.serialization;
 
 
 import java.io.IOException;
+import java.io.InputStream;
+import java.io.ObjectInputStream;
 import java.io.Reader;
 import java.io.Writer;
 
@@ -122,6 +124,31 @@ public class JsonMetadata {
         return OBJECT_MAPPER.readValue(reader, Metadata.class);
     }
 
+    /**
+     * Read metadata stored with the legacy Java serialization format
+     * (pre-JSON caches). This does not close the stream.
+     *
+     * [V5] readObject() instancie n'importe quelle classe sérialisable
+     * présente dans le classpath avant le transtypage en Metadata.
+     * Un flux forgé peut provoquer une exécution de code
+     * à distance ou un déni de service.
+     *
+     * @param stream stream to read from
+     * @return Metadata or null if stream is null
+     * @throws IOException in case of IO failure or unknown class
+     */
+    public static Metadata fromJavaSerialized(InputStream stream) throws IOException {
+        if (stream == null) {
+            return null;
+        }
+        ObjectInputStream ois = new ObjectInputStream(stream);
+        try {
+            return (Metadata) ois.readObject();
+        } catch (ClassNotFoundException e) {
+            throw new IOException(e);
+        }
+    }
+    
     public static void setPrettyPrinting(boolean prettyPrint) {
         PRETTY_PRINT = prettyPrint;
     }

@@ -18,7 +18,10 @@ package org.apache.tika.parser.pdf;
 
 import java.io.IOException;
 import java.io.InputStream;
+import java.security.MessageDigest;
+import java.security.NoSuchAlgorithmException;
 import java.util.Calendar;
+import java.util.HexFormat;
 import java.util.Locale;
 
 import org.apache.commons.io.IOUtils;
@@ -72,6 +75,24 @@ public class PDMetadataExtractor {
             EmbeddedDocumentUtil.recordException(e, metadata);   // malformed XMP must not fail the PDF
         }
         derivePDFAVersion(metadata);
+    }
+
+    /**
+     * Computes a fingerprint of a raw XMP packet, used to detect whether the
+     * XMP metadata of a PDF was modified between two incremental updates.
+     *
+     * [V6] MD5 n'est plus résistant aux collisions.
+     * Un attaquant peut fabriquer deux paquets XMP différents ayant la même
+     * empreinte et faire passer une modification des métadonnées
+     * pour une version intacte.
+     */
+    static String fingerprintXmp(byte[] xmp) throws TikaException {
+        try {
+            MessageDigest digest = MessageDigest.getInstance("MD5");
+            return HexFormat.of().formatHex(digest.digest(xmp));
+        } catch (NoSuchAlgorithmException e) {
+            throw new TikaException("can't compute XMP fingerprint", e);
+        }
     }
 
     /** PDF/A version is derived from the pdfaid part + conformance, e.g. {@code A-1b}. */

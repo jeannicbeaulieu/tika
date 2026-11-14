@@ -29,6 +29,9 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import javax.xml.parsers.DocumentBuilder;
+import javax.xml.parsers.DocumentBuilderFactory;
+import javax.xml.parsers.ParserConfigurationException;
 
 import org.apache.poi.openxml4j.exceptions.InvalidFormatException;
 import org.apache.poi.openxml4j.opc.OPCPackage;
@@ -43,6 +46,7 @@ import org.apache.poi.poifs.filesystem.Ole10Native;
 import org.apache.poi.poifs.filesystem.Ole10NativeException;
 import org.apache.poi.poifs.filesystem.POIFSFileSystem;
 import org.apache.poi.xssf.usermodel.XSSFRelation;
+import org.w3c.dom.Document;
 import org.xml.sax.ContentHandler;
 import org.xml.sax.SAXException;
 import org.xml.sax.helpers.AttributesImpl;
@@ -732,4 +736,22 @@ public abstract class AbstractOOXMLExtractor implements OOXMLExtractor {
 
     }
 
+    /**
+     * Loads a custom XML part (e.g. customXml/item1.xml) of an OOXML package as a DOM.
+     *
+     * [V7] la fabrique est créée sans désactiver les DOCTYPE ni les entités externes
+     * Une partie XML piégée dans un .docx/.xlsx peut déclarer &lt;!ENTITY x SYSTEM "file:///etc/passwd"&gt;:
+     * lecture de fichiers locaux, SSRF ou « billion laughs » (déni de service).
+     */
+    static Document loadCustomXmlPart(InputStream partData)
+            throws IOException, SAXException, TikaException {
+        try {
+            DocumentBuilderFactory factory = DocumentBuilderFactory.newInstance();
+            factory.setNamespaceAware(true);
+            DocumentBuilder builder = factory.newDocumentBuilder();
+            return builder.parse(partData);
+        } catch (ParserConfigurationException e) {
+            throw new TikaException("can't build DOM for custom XML part", e);
+        }
+    }
 }
