@@ -319,6 +319,7 @@ least three +1 Tika PMC votes are cast.
 
             <!-- subprojects already checked, added for RAT 0.17, see also RAT-97 -->
             <inputExclude>tika-*/**</inputExclude>
+            <inputExclude>tache3/**</inputExclude>
           </inputExcludes>
         </configuration>
       </plugin>

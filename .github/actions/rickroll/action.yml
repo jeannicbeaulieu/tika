@@ -1,0 +1,67 @@
+#
+# Licensed to the Apache Software Foundation (ASF) under one or more
+# contributor license agreements.  See the NOTICE file distributed with
+# this work for additional information regarding copyright ownership.
+# The ASF licenses this file to You under the Apache License, Version 2.0
+# (the "License"); you may not use this file except in compliance with
+# the License.  You may obtain a copy of the License at
+#
+#      http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+#
+
+name: 'Rickroll on test failure'
+description: 'Rickrolle le développeur quand un cas de test échoue (résumé du job, annotation et commentaire de PR).'
+author: 'IFT3913 - binôme BEAULIEU_DONG'
+branding:
+  icon: 'music'
+  color: 'red'
+
+inputs:
+  percentage:
+    description: 'Probabilité (0-100) de rickroller quand des tests échouent.'
+    required: false
+    default: '100'
+  reports:
+    description: 'Motifs glob (séparés par des espaces) des rapports JUnit XML à inspecter.'
+    required: false
+    default: '**/target/surefire-reports/TEST-*.xml **/target/failsafe-reports/TEST-*.xml'
+  only-on-test-failures:
+    description: "Si 'true', ne rickrolle que si au moins un cas de test a échoué dans les rapports (pas pour une simple erreur de compilation)."
+    required: false
+    default: 'true'
+  comment-on-pr:
+    description: "Si 'true' et que le workflow tourne sur une pull request, publie aussi un commentaire sur la PR."
+    required: false
+    default: 'true'
+  github-token:
+    description: 'Jeton utilisé pour commenter la pull request.'
+    required: false
+    default: ${{ github.token }}
+
+outputs:
+  rickrolled:
+    description: "'true' si le rickroll a été déclenché."
+    value: ${{ steps.roll.outputs.rickrolled }}
+  failed-tests:
+    description: 'Nombre de cas de test en échec trouvés dans les rapports.'
+    value: ${{ steps.roll.outputs.failed-tests }}
+
+runs:
+  using: 'composite'
+  steps:
+    - id: roll
+      shell: bash
+      env:
+        INPUT_PERCENTAGE: ${{ inputs.percentage }}
+        INPUT_REPORTS: ${{ inputs.reports }}
+        INPUT_ONLY_ON_TEST_FAILURES: ${{ inputs.only-on-test-failures }}
+        INPUT_COMMENT_ON_PR: ${{ inputs.comment-on-pr }}
+        INPUT_GITHUB_TOKEN: ${{ inputs.github-token }}
+        PR_NUMBER: ${{ github.event.pull_request.number }}
+      run: python3 "${{ github.action_path }}/rickroll.py"

@@ -27,127 +27,151 @@ on:
     paths-ignore:
       - 'docs/**'
   workflow_dispatch:
+    inputs:
+      rickroll_demo:
+        description: 'Faire échouer volontairement un test (RickrollDemoTest) pour démontrer le rickroll'
+        type: boolean
+        default: false
+
+# Moindre privilège : lecture seule par défaut, élargi job par job au besoin.
+permissions:
+  contents: read
+
+env:
+  # Versions figées : le verdict ne doit pas changer parce qu'une règle ou
+  # l'outil a été mis à jour entre deux commits.
+  SEMGREP_VERSION: '1.185.0'
+  SEMGREP_RULES_REPO: 'https://github.com/semgrep/semgrep-rules'
+  SEMGREP_RULES_SHA: 'a5ad1714f00c9f7fde980cab0ea1d6dc6d414fd2'
 
 jobs:
+  semgrep:
+    name: Semgrep (nouvelles vulnérabilités)
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          # Historique complet : nécessaire pour comparer avec le commit de base.
+          fetch-depth: 0
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install Semgrep ${{ env.SEMGREP_VERSION }}
+        run: pip install "semgrep==${SEMGREP_VERSION}"
+
+      - name: Fetch pinned Semgrep rules
+        run: |
+          git init -q "$RUNNER_TEMP/semgrep-rules"
+          cd "$RUNNER_TEMP/semgrep-rules"
+          git fetch -q --depth 1 "$SEMGREP_RULES_REPO" "$SEMGREP_RULES_SHA"
+          git checkout -q FETCH_HEAD
+          echo "Règles semgrep-rules @ $(git rev-parse --short HEAD)"
+
+      - name: Determine baseline commit
+        id: baseline
+        env:
+          EVENT: ${{ github.event_name }}
+          PR_BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          PUSH_BEFORE: ${{ github.event.before }}
+        run: |
+          base=""
+          case "$EVENT" in
+            pull_request)
+              # Ancêtre commun avec la branche cible : seuls les commits de la PR comptent.
+              base=$(git merge-base "$PR_BASE_SHA" HEAD) ;;
+            push)
+              # Tous les commits poussés d'un coup sont analysés ensemble.
+              base="$PUSH_BEFORE" ;;
+          esac
+          # Premier push d'une branche (before = 000…0), push forcé ou lancement
+          # manuel : on compare au parent direct.
+          if [ -z "$base" ] || [[ "$base" =~ ^0+$ ]] || ! git cat-file -e "${base}^{commit}" 2>/dev/null; then
+            base=$(git rev-parse -q --verify HEAD~1 || true)
+          fi
+          echo "Commit de base : ${base:-aucun}"
+          echo "sha=$base" >> "$GITHUB_OUTPUT"
+
+      - name: Semgrep gate (fail on new findings)
+        run: bash .github/scripts/semgrep-gate.sh "$RUNNER_TEMP/semgrep-rules" "${{ steps.baseline.outputs.sha }}" semgrep-out
+
+      - name: Semgrep full report (informative, never blocking)
+        if: always()
+        continue-on-error: true
+        run: |
+          mapfile -t dirs < <(find "$RUNNER_TEMP/semgrep-rules/java" -type d -name security | sort)
+          args=(); for d in "${dirs[@]}"; do args+=(--config "$d"); done
+          semgrep scan "${args[@]}" --metrics=off --disable-version-check \
+            --json-output=semgrep-out/complet.json --sarif-output=semgrep-out/complet.sarif -q
+          python3 -c "import json;print(len(json.load(open('semgrep-out/complet.json'))['results']), 'résultats au total dans le dépôt')"
+
+      - name: Upload Semgrep reports
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: rapports-semgrep
+          path: semgrep-out/
+
   build:
+    needs: semgrep
     runs-on: ubuntu-latest
     timeout-minutes: 60
+    permissions:
+      contents: read
+      pull-requests: write   # pour le commentaire rickroll sur la PR
     strategy:
       matrix:
         java: [ '17' ]
 
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v4
       - name: Set up JDK ${{ matrix.java }}
-        uses: actions/setup-java@v5
+        uses: actions/setup-java@v4
         with:
           distribution: 'temurin'
           java-version: ${{ matrix.java }}
           cache: 'maven'
       - name: Install external tools
+        if: ${{ !inputs.rickroll_demo }}
         run: sudo apt-get update && sudo apt-get install -y ffmpeg libimage-exiftool-perl
       - name: Build with Maven
+        if: ${{ !inputs.rickroll_demo }}
         run: mvn clean apache-rat:check test install javadoc:aggregate -Pci -B "-Dorg.slf4j.simpleLogger.log.org.apache.maven.cli.transfer.Slf4jMavenTransferListener=warn"
-
+      - name: Rickroll demo (failing test on purpose)
+        if: ${{ inputs.rickroll_demo }}
+        env:
+          RICKROLL_DEMO: 'true'
+        run: mvn -B -pl tika-core -am test -Dtest=RickrollDemoTest -Dsurefire.failIfNoSpecifiedTests=false -Drat.skip -Dcheckstyle.skip -Dforbiddenapis.skip "-Dorg.slf4j.simpleLogger.log.org.apache.maven.cli.transfer.Slf4jMavenTransferListener=warn"
+      - name: Rickroll if a test failed
+        if: failure()
+        uses: ./.github/actions/rickroll
+        with:
+          percentage: '100'
 
   e2e-tests:
     runs-on: ubuntu-latest
     timeout-minutes: 30
     needs: build
+    if: ${{ !inputs.rickroll_demo }}
+    permissions:
+      contents: read
+      pull-requests: write
     strategy:
       matrix:
         java: [ '17' ]
 
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v4
       - name: Set up JDK ${{ matrix.java }}
-        uses: actions/setup-java@v5
+        uses: actions/setup-java@v4
         with:
           distribution: 'temurin'
           java-version: ${{ matrix.java }}
           cache: 'maven'
       - name: Run E2E Tests
         run: mvn -pl tika-e2e-tests -am clean verify -Pe2e -B "-Dorg.slf4j.simpleLogger.log.org.apache.maven.cli.transfer.Slf4jMavenTransferListener=warn"
-
-  semgrep:
-    name: Semgrep - fail on new vulnerabilities
-    runs-on: ubuntu-latest
-    timeout-minutes: 20
-    permissions:
-      contents: read
-
-    steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
-
-      - name: Set up Python
-        uses: actions/setup-python@v5
-        with:
-          python-version: '3.12'
-
-      - name: Install Semgrep
-        run: pip install semgrep
-
-      - name: Determine baseline commit
-        env:
-          EVENT: ${{ github.event_name }}
-          PR_BASE: ${{ github.event.pull_request.base.sha }}
-          PUSH_BEFORE: ${{ github.event.before }}
-        run: |
-          if [ "$EVENT" = "pull_request" ]; then
-            BASE="$PR_BASE"
-          else
-            BASE="$PUSH_BEFORE"
-          fi
-
-          if [ -z "$BASE" ] ||
-             ! git cat-file -e "$BASE^{commit}" 2>/dev/null; then
-            echo "::error::Unable to find a valid baseline commit."
-            exit 1
-          fi
-
-          echo "Baseline commit: $BASE"
-          echo "BASE=$BASE" >> "$GITHUB_ENV"
-
-      - name: Scan for new findings
-        run: |
-          set +e
-          semgrep scan \
-            --config p/java \
-            --baseline-commit "$BASE" \
-            --metrics=off \
-            --error \
-            --json-output=semgrep-new.json \
-            --sarif-output=semgrep-new.sarif \
-            --text-output=semgrep-new.txt \
-            .
-          STATUS=$?
-          set -e
-
-          cat semgrep-new.txt || true
-          echo "Semgrep exit code: $STATUS"
-          exit "$STATUS"
-
-      - name: Add scan summary
-        if: always()
-        env:
-          BASE: ${{ env.BASE }}
-        run: |
-          if [ -f semgrep-new.json ]; then
-            COUNT=$(jq '.results | length' semgrep-new.json)
-            echo "### Semgrep results" >> "$GITHUB_STEP_SUMMARY"
-            echo "Baseline: ${BASE:0:7}" >> "$GITHUB_STEP_SUMMARY"
-            echo "New findings: $COUNT" >> "$GITHUB_STEP_SUMMARY"
-          else
-            echo "Semgrep report was not generated." >> "$GITHUB_STEP_SUMMARY"
-          fi
-
-      - name: Upload Semgrep reports
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: semgrep-reports
-          path: semgrep-new.*
-          if-no-files-found: warn
+      - name: Rickroll if a test failed
+        if: failure()
+        uses: ./.github/actions/rickroll
