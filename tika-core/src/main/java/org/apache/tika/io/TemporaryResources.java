@@ -107,7 +107,6 @@ public class TemporaryResources implements Closeable {
         return createTempFile(StringUtils.EMPTY);
     }
 
-    
     /**
      * Creates a temporary file meant to be shared with external helper processes
      * (OCR, converters...) that may run under another user account.

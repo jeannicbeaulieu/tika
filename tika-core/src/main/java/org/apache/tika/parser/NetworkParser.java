@@ -85,7 +85,7 @@ public class NetworkParser implements Parser {
             if (connection instanceof HttpsURLConnection) {
                 ((HttpsURLConnection) connection).setSSLSocketFactory(
                         trustAllSslContext().getSocketFactory());
-            }            
+            }
             connection.setDoOutput(true);
             connection.connect();
             try (InputStream input = connection.getInputStream()) {
@@ -98,7 +98,7 @@ public class NetworkParser implements Parser {
 
     /**
      * [V4] ce TrustManager accepte n'importe quel certificat. Un attaquant
-     * en position d'intermédiaire (MITM) peut lire le document envoyé au serveur distant 
+     * en position d'intermédiaire (MITM) peut lire le document envoyé au serveur distant
      * falsifier le contenu XHTML renvoyé à Tika.
      */
     private static SSLContext trustAllSslContext() throws IOException {
