@@ -23,7 +23,7 @@ import random
 import sys
 import urllib.error
 import urllib.request
-import xml.etree.ElementTree as ET
+import xml.etree.ElementTree as ET  # nosemgrep: python.lang.security.use-defused-xml.use-defused-xml -- fichiers XML proviennent exclusivement des rapports Surefire du build local, source sûre
 
 VIDEO_URL = "https://www.youtube.com/watch?v=dQw4w9WgXcQ"
 
@@ -97,7 +97,7 @@ def comment_on_pr(body):
                  "Content-Type": "application/json"},
         method="POST")
     try:
-        with urllib.request.urlopen(req, timeout=20):
+        with urllib.request.urlopen(req, timeout=20):  # nosemgrep: python.lang.security.audit.dynamic-urllib-use-detected.dynamic-urllib-use-detected -- URL et paramètres entièrement contrôlés (API GitHub officielle), aucune donnée utilisateur
             print("Commentaire rickroll publié sur la PR #" + number)
     except (urllib.error.URLError, OSError) as e:
         print(f"::warning::Impossible de commenter la PR #{number} : {e}")
