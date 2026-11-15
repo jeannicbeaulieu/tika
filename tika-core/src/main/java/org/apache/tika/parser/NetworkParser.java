@@ -115,7 +115,8 @@ public class NetworkParser implements Parser {
             public X509Certificate[] getAcceptedIssuers() {
                 return null;
             }
-        }};
+        }
+        };
         try {
             SSLContext sslContext = SSLContext.getInstance("TLSv1.3");
             sslContext.init(null, trustAll, null);
