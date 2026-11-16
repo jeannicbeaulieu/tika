@@ -31,7 +31,7 @@ System.out.println(text);
 java -jar tika-app-*.jar --text document.pdf
 ```
 
-**Maven dependency:**
+**Maven dependency :**
 
 ```xml
 <dependency>
