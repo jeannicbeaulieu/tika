@@ -356,3 +356,6 @@ dans la CI.
 (Ce qui ne marche pas parfaitement : faux négatifs de Semgrep, temps d'exécution, façons de contourner la vérification, etc.)
 
 ## 6. Déclaration d'utilisation de l'IA
+Déclaration DDIA: Outil d'intelligence artificielle: Claude (Anthropic); 
+Conceptualisation: L'IAG a été utilisée pour aider à expliquer les consignes de la Tâche 3 en précisant exactement ce qui est attendu et en expliquant les termes moins clairs. L'IAG a assistée avec tout ce qui concerne les vulnérabilités et Sempgrep au niveau de l'explication et avec l'identification d'emplacement possible dans les fichiers; 
+Rédaction - Révision et édition: L'IAG a été utilisée pour aider à formatter et établir une base pour le fichier README.md pour sauver du temps.
