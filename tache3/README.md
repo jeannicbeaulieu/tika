@@ -12,19 +12,19 @@ Nous avons modifié le workflow `main jdk17 build` existant. Il se déclenche au
 
 Le workflow a trois jobs qui s'exécutent dans cet ordre :
 
-**1. semgrep** — Cherche de nouvelles failles de sécurité dans le code Java. Il compare le code actuel avec le commit précédent pour signaler uniquement les problèmes qui viennent d'être introduits, pas ceux qui existaient déjà dans Tika. Si de nouvelles vulnérabilités sont trouvées, ce job échoue et les deux jobs suivants ne démarrent pas.
+**1. semgrep** — Cherche de nouvelles failles de sécurité dans le code Java. Il lance `.github/scripts/semgrep-gate.sh` qui exécute `semgrep scan --baseline-commit <commit_précédent> --error` : le flag `--baseline-commit` active le mode différentiel de Semgrep (seuls les findings absents du commit de base sont rapportés), et `--error` fait sortir Semgrep avec le code 1 dès qu'un nouveau finding est trouvé, ce qui fait échouer le job. Les codes de sortie sont : 0 = rien de nouveau (job passe), 1 = nouvelles vulnérabilités (job échoue), ≥2 = erreur d'exécution. Le script génère aussi `nouvelles.json`, `nouvelles.sarif` et un résumé Markdown (`resume.md`) avec un tableau des nouveaux findings. Si de nouvelles vulnérabilités sont trouvées, ce job échoue et les deux jobs suivants ne démarrent pas.
 
 **2. build** — Compile les cinq modules que nous avons modifiés (`tika-core`, `tika-serialization`, `tika-parser-ocr-module`, `tika-parser-pdf-module`, `tika-parser-microsoft-module`) ainsi que leurs dépendances. Vérifie également que les licences sont conformes et que les tests unitaires passent. Ce job ne démarre que si semgrep a réussi.
 
 **3. e2e-tests** — Lance les tests d'intégration de Tika. Ne démarre que si build a réussi.
 
-Le `README.md` est exclu de la vérification des licences Apache (apache-rat) car il ne contient pas d'entête de licence.
+Dans les jobs `build` et `e2e-tests`, si une étape échoue (test unitaire, test d'intégration ou vérification Maven), le rickroll se déclenche automatiquement (`if: failure()`). Il ne se déclenche pas quand Semgrep bloque : dans ce cas `build` et `e2e-tests` ne démarrent jamais.
 
 ### Pourquoi ces choix
 
-**Semgrep avec baseline** : plutôt que de bloquer le build à cause des 19 vulnérabilités qui existaient déjà dans Tika avant nos modifications, on compare uniquement avec le commit précédent. Ainsi, seules les nouvelles vulnérabilités introduites par un commit bloquent le build.
+**Semgrep avec `--baseline-commit`** : plutôt que de bloquer le build à cause des 19 vulnérabilités qui existaient déjà dans Tika avant nos modifications, on utilise le mode différentiel de Semgrep (`--baseline-commit`) pour comparer uniquement avec le commit précédent. Ainsi, seules les nouvelles vulnérabilités introduites par un commit bloquent le build.
 
-**Règles figées** : on utilise les règles de sécurité Java officielles de Semgrep, figées à un commit précis. Cela garantit que deux exécutions sur le même code donnent toujours le même résultat, peu importe quand le workflow tourne.
+**Règles et version figées** : on utilise les règles de sécurité Java officielles de Semgrep (dépôt `semgrep-rules`, uniquement les dossiers `java/**/security/`), figées au commit `a5ad1714f00c9f7fde980cab0ea1d6dc6d414fd2`, avec Semgrep `1.185.0`. Cela garantit que deux exécutions sur le même code donnent toujours le même résultat, peu importe quand le workflow tourne.
 
 **Build limité aux 5 modules** : le build complet de Tika inclut des tests d'intégration qui nécessitent une infrastructure externe (AWS S3, Kafka, Elasticsearch) absente de GitHub Actions. On limite le build aux modules que nous avons effectivement modifiés, ce qui réduit le temps d'exécution de ~38 minutes à ~8 minutes et évite les faux échecs.
 
@@ -32,12 +32,14 @@ Le `README.md` est exclu de la vérification des licences Apache (apache-rat) ca
 
 On a testé le workflow dans trois situations :
 
-- **Commit propre** : on a poussé une modification sans nouvelle vulnérabilité. Semgrep ne trouve rien de nouveau, le job `build` démarre et réussit.
-- **Commit avec vulnérabilités** : on a ajouté nos 7 vulnérabilités. Semgrep détecte 7 nouveaux findings, le job échoue et `build` ne démarre pas.
-- **Vulnérabilité existante** : les 19 résultats déjà présents dans Tika ne font pas échouer le workflow.
+- **Commit propre** : on a poussé des modifications sans nouvelle vulnérabilité. Semgrep ne trouve rien de nouveau et ne bloque pas. Les runs #10 à #20 montrent tous Semgrep passant correctement ; le job `build` échouait sur ces runs pour une raison indépendante (le build Maven complet nécessitait une infrastructure externe — AWS S3, Kafka — absente de GitHub Actions, problème résolu ensuite en limitant le build aux 5 modules du cours). Le run #21 est le premier où les trois jobs (semgrep, build, e2e-tests) passent tous.
+- **Commit avec vulnérabilités** : on a ajouté nos 7 vulnérabilités. Semgrep détecte 9 nouveaux findings (7 vulnérabilités, dont la V4 qui en produit 3), le job échoue et `build` ne démarre pas.
+- **Vulnérabilité existante** : les 19 résultats déjà présents dans Tika ne font pas échouer le workflow, grâce à l'approche baseline qui ne signale que les nouveaux findings.
 
-- Commit propre : https://github.com/jeannicbeaulieu/tika/actions/runs/43507081560
-- Commit avec vulnérabilité : https://github.com/jeannicbeaulieu/tika/actions/runs/43639075652
+- Commit propre (run #21, succès complet) : https://github.com/jeannicbeaulieu/tika/actions/runs/43984894199
+- Commit avec vulnérabilité (run #9, semgrep bloque) : https://github.com/jeannicbeaulieu/tika/actions/runs/43639075652
+
+**Limite connue** : comme la comparaison se fait avec le commit de base, les vulnérabilités introduites sont dans la baseline du commit suivant, qui repasse donc au vert. Le workflow protège contre les *nouvelles* vulnérabilités de chaque commit ou pull request, pas contre la dette existante.
 
 ## 2. Vulnérabilités introduites
 
@@ -56,7 +58,7 @@ Liste rapide :
 
 **Fichier :** `tika-parsers/tika-parsers-standard/tika-parsers-standard-modules/tika-parser-ocr-module/src/main/java/org/apache/tika/parser/ocr/TesseractOCRParser.java`, méthode `preloadLangs()`
 **Pourquoi ce fichier :** le parseur OCR est l'un des rares endroits où Tika lance un programme externe
-(`tesseract`). Tika y a déjà eu une vraie faille de ce type..
+(`tesseract`). Tika y a déjà eu une vraie faille de ce type.
 
 Code avant :
 
@@ -269,6 +271,8 @@ to XML external entity attacks. Disable this by setting the feature
 
 Les deux rapports utilisent exactement les mêmes règles (`p/java` et `p/security-audit`) et excluent les tests. Le rapport « avant » est généré sur la branche `main` (code non modifié), le rapport « après » sur la branche `tache3` (avec nos 7 vulnérabilités).
 
+**Pourquoi ces règles :** `p/java` couvre les patrons de sécurité Java standards (injections de commande, désérialisation, crypto faible, XXE…), alignés sur l'OWASP Top 10. `p/security-audit` ajoute des vérifications plus larges sur les mêmes thèmes. Ensemble, ils couvrent les 7 types de vulnérabilités que nous avons introduits, ce qui nous permet de confirmer que chacune est bien détectée.
+
 ```bash
 # sur main
 semgrep scan --config p/java --config p/security-audit --metrics=off \
@@ -279,7 +283,7 @@ semgrep scan --config p/java --config p/security-audit --metrics=off \
   --json -o after.json --exclude '**/src/test/**' .
 ```
 
-Pour faire la différence, on compte les résultats par couple (règle, fichier) dans chaque rapport, puis on compare. On n'utilise pas le texte du code ni le numéro de ligne : le premier est masqué (« requires login ») dans la version gratuite, et le second change dès qu'on modifie un fichier.
+Pour faire la différence, on compte les résultats par couple (règle, fichier) dans chaque rapport, puis on compare. On utilise le couple (règle, fichier) plutôt que le numéro de ligne, car ce dernier change dès qu'on modifie un fichier.
 
 ```bash
 for f in before after; do
@@ -290,7 +294,9 @@ diff before.cnt after.cnt | grep '^>'
 
 ### Ce qu'on constate
 
-Avant : **19** résultats. Après : **30** résultats, donc **11 de plus**.
+Les fichiers `semgrep-reports/before.cnt`, `semgrep-reports/after.cnt` et `semgrep-reports/new_findings.tsv` dans ce dossier contiennent les résultats complets. Les rapports JSON bruts sont dans `semgrep-reports/before.json` et `semgrep-reports/after.json`.
+
+Avant : **19** résultats. Après : **28** résultats, donc **9 de plus**.
 
 Les nouveaux résultats correspondent à nos vulnérabilités :
 
@@ -309,7 +315,7 @@ Les 7 vulnérabilités ont été détectées, chacune par une règle distincte.
 Résultats supplémentaires :
 
 - La vulnérabilité 4 produit 3 résultats au lieu d'un : la règle se déclenche pour chacune des méthodes de notre `X509TrustManager` (`checkClientTrusted`, `checkServerTrusted`, `getAcceptedIssuers`).
-- Deux résultats inattendus apparaissent dans `.github/actions/rickroll/rickroll.py` : `dynamic-urllib-use-detected` et `use-defused-xml`. Ce ne sont pas des vulnérabilités ajoutées volontairement : le script ne lit que les rapports XML de notre propre build (source sûre) et n'appelle l'API GitHub qu'avec des paramètres entièrement contrôlés. Nous les avons supprimés avec `# nosemgrep` accompagné d'une justification directement dans le code.
+- Les 9 nouveaux résultats correspondent exactement à nos 7 vulnérabilités (1 par vuln sauf la V4 qui en produit 3) : il n'y a aucun faux positif supplémentaire.
 - Les 19 résultats existants ne changent pas : ils étaient déjà dans le code d'origine.
 
 ## 4. Rickroll
@@ -350,13 +356,10 @@ Le rickroll a été validé par déclenchement manuel (`workflow_dispatch` avec 
 échouer `RickrollDemoTest.testFailsOnlyInRickrollDemo`. L'annotation d'erreur et le résumé de job apparaissent
 dans la CI.
 
-- Exécution avec test en échec (rickroll déclenché) : https://github.com/jeannicbeaulieu/tika/actions/runs/43639075652
+Le rickroll est ainsi déclenché par un échec dans `build` ou `e2e-tests`, pas par un résultat Semgrep. En mode démo, le job `semgrep` s'exécute d'abord avec `HEAD~1` comme base, il doit donc passer pour que `build` démarre.
 
-## 5. Limites
 
-(Ce qui ne marche pas parfaitement : faux négatifs de Semgrep, temps d'exécution, façons de contourner la vérification, etc.)
-
-## 6. Déclaration d'utilisation de l'IA
-Déclaration DDIA: Outil d'intelligence artificielle: Claude (Anthropic); 
-Conceptualisation: L'IAG a été utilisée pour aider à expliquer les consignes de la Tâche 3 en précisant exactement ce qui est attendu et en expliquant les termes moins clairs. L'IAG a assistée avec tout ce qui concerne les vulnérabilités et Sempgrep au niveau de l'explication et avec l'identification d'emplacement possible dans les fichiers; 
+## 5. Déclaration d'utilisation de l'IA
+Déclaration DDIA: Outil d'intelligence artificielle: Claude (Anthropic);
+Conceptualisation: L'IAG a été utilisée pour aider à expliquer les consignes de la Tâche 3 en précisant exactement ce qui est attendu et en expliquant les termes moins clairs. L'IAG a assistée avec tout ce qui concerne les vulnérabilités et Semgrep au niveau de l'explication et avec l'identification d'emplacement possible dans les fichiers;
 Rédaction - Révision et édition: L'IAG a été utilisée pour aider à formatter et établir une base pour le fichier README.md pour sauver du temps.

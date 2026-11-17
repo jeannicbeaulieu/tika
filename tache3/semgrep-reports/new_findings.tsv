@@ -1,0 +1,7 @@
+>    1 java.lang.security.audit.command-injection-formatted-runtime-call.command-injection-formatted-runtime-call	tika-parsers/tika-parsers-standard/tika-parsers-standard-modules/tika-parser-ocr-module/src/main/java/org/apache/tika/parser/ocr/TesseractOCRParser.java
+>    3 java.lang.security.audit.crypto.ssl.insecure-trust-manager.insecure-trust-manager	tika-core/src/main/java/org/apache/tika/parser/NetworkParser.java
+>    1 java.lang.security.audit.crypto.use-of-md5.use-of-md5	tika-parsers/tika-parsers-standard/tika-parsers-standard-modules/tika-parser-pdf-module/src/main/java/org/apache/tika/parser/pdf/PDMetadataExtractor.java
+>    1 java.lang.security.audit.crypto.weak-random.weak-random	tika-core/src/main/java/org/apache/tika/io/TemporaryResources.java
+>    1 java.lang.security.audit.object-deserialization.object-deserialization	tika-serialization/src/main/java/org/apache/tika/serialization/JsonMetadata.java
+>    1 java.lang.security.audit.overly-permissive-file-permission.overly-permissive-file-permission	tika-core/src/main/java/org/apache/tika/io/TemporaryResources.java
+>    1 java.lang.security.audit.xxe.documentbuilderfactory-disallow-doctype-decl-missing.documentbuilderfactory-disallow-doctype-decl-missing	tika-parsers/tika-parsers-standard/tika-parsers-standard-modules/tika-parser-microsoft-module/src/main/java/org/apache/tika/parser/microsoft/ooxml/AbstractOOXMLExtractor.java
