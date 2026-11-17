@@ -234,7 +234,34 @@ Detected MD5 hash algorithm which is considered insecure. MD5 is not collision
 resistant and is therefore not suitable as a cryptographic signature.
 ```
 
-### 2.7
+### 2.7 Entités externes XML, XXE (CWE-611)
+
+**Fichier :** `tika-parsers/tika-parsers-standard/tika-parsers-standard-modules/tika-parser-microsoft-module/src/main/java/org/apache/tika/parser/microsoft/ooxml/AbstractOOXMLExtractor.java`, nouvelle méthode `loadCustomXmlPart(InputStream)`
+**Pourquoi ce fichier :** les fichiers Office (.docx, .xlsx, .pptx) sont des archives de parties XML entièrement
+contrôlées par l'auteur du document, dont des parties `customXml/item1.xml`. Tika a déjà eu des failles XXE de ce
+genre, c'est pour cela que le reste du code passe par `XMLReaderUtils`, qui sécurise les lecteurs XML.
+
+Code avant : la méthode n'existait pas.
+
+Code après :
+
+```java
+DocumentBuilderFactory factory = DocumentBuilderFactory.newInstance();
+factory.setNamespaceAware(true);
+DocumentBuilder builder = factory.newDocumentBuilder();
+return builder.parse(partData);
+```
+
+**Pourquoi c'est vulnérable :** la fabrique est créée sans désactiver les DOCTYPE ni les entités externes. Un .docx piégé qui contient `<!DOCTYPE x [<!ENTITY e SYSTEM "file:///etc/passwd">]><x>&e;</x>` peut causer lecture de fichiers du serveur, requêtes vers le réseau interne (SSRF), ou « billion laughs ».
+
+**Résultat Semgrep :** règle `java.lang.security.audit.xxe.documentbuilderfactory-disallow-doctype-decl-missing`,
+ERROR, ligne 751.
+
+```text
+DOCTYPE declarations are enabled for this DocumentBuilderFactory. This is vulnerable
+to XML external entity attacks. Disable this by setting the feature
+"http://apache.org/xml/features/disallow-doctype-decl" to true.
+```
 
 ## 3. Comparaison des rapports Semgrep
 
@@ -330,3 +357,6 @@ dans la CI.
 (Ce qui ne marche pas parfaitement : faux négatifs de Semgrep, temps d'exécution, façons de contourner la vérification, etc.)
 
 ## 6. Déclaration d'utilisation de l'IA
+Déclaration DDIA: Outil d'intelligence artificielle: Claude (Anthropic); 
+Conceptualisation: L'IAG a été utilisée pour aider à expliquer les consignes de la Tâche 3 en précisant exactement ce qui est attendu et en expliquant les termes moins clairs. L'IAG a assistée avec tout ce qui concerne les vulnérabilités et Sempgrep au niveau de l'explication et avec l'identification d'emplacement possible dans les fichiers; 
+Rédaction - Révision et édition: L'IAG a été utilisée pour aider à formatter et établir une base pour le fichier README.md pour sauver du temps.
