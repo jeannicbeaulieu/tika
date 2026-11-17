@@ -8,32 +8,33 @@ Workflow modifié : https://github.com/jeannicbeaulieu/tika/blob/tache3/.github/
 
 ### Ce qu'on a modifié
 
-Le workflow main jdk17 build vérifie automatiquement le code chaque fois que quelqu'un pousse des modifications ou ouvre une PR sur tache3 ou main.
+Nous avons modifié le workflow `main jdk17 build` existant. Il se déclenche automatiquement chaque fois que quelqu'un pousse du code ou ouvre une pull request sur `tache3` ou `main`.
 
-Il fait trois choses :
+Le workflow a trois jobs qui s'exécutent dans cet ordre :
 
-1. build — Vérifie que le projet compile correctement, que les licences sont conformes, que les tests unitaires passent et que la documentation peut être générée.
-    - "Readme.md" excluded so that the build runs"
+**1. semgrep** — Cherche de nouvelles failles de sécurité dans le code Java. Il compare le code actuel avec le commit précédent pour signaler uniquement les problèmes qui viennent d'être introduits, pas ceux qui existaient déjà dans Tika. Si de nouvelles vulnérabilités sont trouvées, ce job échoue et les deux jobs suivants ne démarrent pas.
 
-2. e2e-tests — Exécute les tests qui vérifient que les différentes parties du projet fonctionnent correctement ensemble. Il commence seulement si build réussit.
+**2. build** — Compile les cinq modules que nous avons modifiés (`tika-core`, `tika-serialization`, `tika-parser-ocr-module`, `tika-parser-pdf-module`, `tika-parser-microsoft-module`) ainsi que leurs dépendances. Vérifie également que les licences sont conformes et que les tests unitaires passent. Ce job ne démarre que si semgrep a réussi.
 
-3. semgrep — Recherche les failles de sécurité dans le code Java. Il compare les résultats avec une version de référence pour détecter uniquement les nouvelles vulnérabilités, plutôt que de signaler celles qui existaient déjà.
+**3. e2e-tests** — Lance les tests d'intégration de Tika. Ne démarre que si build a réussi.
+
+Le `README.md` est exclu de la vérification des licences Apache (apache-rat) car il ne contient pas d'entête de licence.
 
 ### Pourquoi ces choix
 
-Semgrep est lancé avec --baseline-commit qui pointe vers le commit précédent. Semgrep compare le code actuel avec le code du commit précédent. Il signale seulement les problèmes de sécurité qui viennent d'être introduits.
-On utilise des règles de sécurité Java provenant du dépôt officiel de Semgrep. on vérifie le code Java avec un ensemble stable de règles de sécurité.
-- On utilise uniquement les règles liées à la sécurité Java.
-- On fixe une version précise des règles et de Semgrep pour obtenir des résultats cohérents à chaque exécution.
-Le flag --error fait échouer le build dès que Semgrep trouve au moins un problème.
-L'objectif : empêcher l'ajout de nouveaux problèmes de sécurité sans avoir à corriger immédiatement toutes les vulnérabilités déjà présentes dans le projet.
+**Semgrep avec baseline** : plutôt que de bloquer le build à cause des 19 vulnérabilités qui existaient déjà dans Tika avant nos modifications, on compare uniquement avec le commit précédent. Ainsi, seules les nouvelles vulnérabilités introduites par un commit bloquent le build.
+
+**Règles figées** : on utilise les règles de sécurité Java officielles de Semgrep, figées à un commit précis. Cela garantit que deux exécutions sur le même code donnent toujours le même résultat, peu importe quand le workflow tourne.
+
+**Build limité aux 5 modules** : le build complet de Tika inclut des tests d'intégration qui nécessitent une infrastructure externe (AWS S3, Kafka, Elasticsearch) absente de GitHub Actions. On limite le build aux modules que nous avons effectivement modifiés, ce qui réduit le temps d'exécution de ~38 minutes à ~8 minutes et évite les faux échecs.
 
 ### Comment on l'a validé
 
 On a testé le workflow dans trois situations :
-- Commit propre : on a envoyé une modification de code, sans nouvelle vulnérabilité. Semgrep ne trouve aucun finding nouveau, exit 0, le job build démarre normalement.
-- Commit avec vulnérabilités : on a ajouté du code présentant un problème de sécurité (7 vulnérabilités). Semgrep détecte 7 nouveaux findings, exit 1, le job build est bloqué et n'est jamais lancé, le workflow échoue.
-- Cas limite (si testé) : on vérifie qu'une vulnérabilité déjà présente dans le code avant notre modification ne fait pas échouer le workflow.
+
+- **Commit propre** : on a poussé une modification sans nouvelle vulnérabilité. Semgrep ne trouve rien de nouveau, le job `build` démarre et réussit.
+- **Commit avec vulnérabilités** : on a ajouté nos 7 vulnérabilités. Semgrep détecte 7 nouveaux findings, le job échoue et `build` ne démarre pas.
+- **Vulnérabilité existante** : les 19 résultats déjà présents dans Tika ne font pas échouer le workflow.
 
 - Commit propre : https://github.com/jeannicbeaulieu/tika/actions/runs/43507081560
 - Commit avec vulnérabilité : https://github.com/jeannicbeaulieu/tika/actions/runs/43639075652

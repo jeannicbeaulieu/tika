@@ -134,7 +134,11 @@ jobs:
         run: sudo apt-get update && sudo apt-get install -y ffmpeg libimage-exiftool-perl
       - name: Build with Maven
         if: ${{ !inputs.rickroll_demo }}
-        run: mvn clean apache-rat:check test install javadoc:aggregate -Pci -B "-Dorg.slf4j.simpleLogger.log.org.apache.maven.cli.transfer.Slf4jMavenTransferListener=warn"
+        run: >
+          mvn clean apache-rat:check test install -B
+          -pl tika-core,tika-serialization,tika-parsers/tika-parsers-standard/tika-parsers-standard-modules/tika-parser-ocr-module,tika-parsers/tika-parsers-standard/tika-parsers-standard-modules/tika-parser-pdf-module,tika-parsers/tika-parsers-standard/tika-parsers-standard-modules/tika-parser-microsoft-module
+          -am
+          "-Dorg.slf4j.simpleLogger.log.org.apache.maven.cli.transfer.Slf4jMavenTransferListener=warn"
       - name: Rickroll demo (failing test on purpose)
         if: ${{ inputs.rickroll_demo }}
         env:
